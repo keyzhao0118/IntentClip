@@ -22,6 +22,8 @@ endif()
 qt_standard_project_setup(REQUIRES 6.5)
 
 qt_add_executable(IntentClip
+    app/copy_gesture_monitor.cpp
+    app/copy_gesture_monitor.h
     app/main.cpp
     app/main_window.cpp
     app/main_window.h
@@ -33,6 +35,8 @@ target_link_libraries(IntentClip
 )
 
 if(WIN32)
+    target_link_libraries(IntentClip PRIVATE user32)
+
     add_custom_command(TARGET IntentClip POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory
             "$<TARGET_FILE_DIR:IntentClip>/platforms"
