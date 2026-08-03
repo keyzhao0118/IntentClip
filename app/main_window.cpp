@@ -31,11 +31,10 @@
 #endif
 
 namespace {
-QLabel* makeSectionTitle(const QString& index, const QString& title, QWidget* parent)
+QLabel* makeSectionTitle(const QString& title, QWidget* parent)
 {
-    auto* label = new QLabel(QStringLiteral("<span class='index'>%1</span>  %2").arg(index, title), parent);
+    auto* label = new QLabel(title, parent);
     label->setObjectName(QStringLiteral("sectionTitle"));
-    label->setTextFormat(Qt::RichText);
     return label;
 }
 
@@ -48,43 +47,31 @@ QFrame* makeSection(QWidget* parent)
 }
 
 MainWindow::MainWindow(QWidget* parent)
-    : QMainWindow(parent)
+    : QDialog(parent)
 {
     setWindowTitle(tr("IntentClip · 拾意"));
-    resize(760, 430);
-    setMinimumSize(600, 480);
+    setObjectName(QStringLiteral("mainDialog"));
+    setWindowFlag(Qt::WindowContextHelpButtonHint, false);
+    resize(760, 500);
+    setMinimumSize(600, 460);
 
-    auto* centralWidget = new QWidget(this);
+    auto* rootLayout = new QVBoxLayout(this);
+    rootLayout->setContentsMargins(24, 22, 24, 24);
+    rootLayout->setSpacing(0);
 
-    centralWidget->setObjectName(QStringLiteral("centralWidget"));
-    auto* layout = new QVBoxLayout(centralWidget);
-    layout->setContentsMargins(32, 28, 32, 36);
-    layout->setSpacing(14);
+    auto* contentWidget = new QWidget(this);
+    contentWidget->setObjectName(QStringLiteral("contentWidget"));
+    auto* layout = new QVBoxLayout(contentWidget);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(12);
+    rootLayout->addWidget(contentWidget);
 
-    auto* headerLayout = new QHBoxLayout;
-    auto* brandLayout = new QVBoxLayout;
-    brandLayout->setSpacing(3);
-    auto* titleLabel = new QLabel(tr("IntentClip · 拾意"), centralWidget);
-    titleLabel->setObjectName(QStringLiteral("titleLabel"));
-    brandLayout->addWidget(titleLabel);
-    auto* subtitleLabel = new QLabel(tr("复制两次，让文本变成下一步行动。"), centralWidget);
-    subtitleLabel->setObjectName(QStringLiteral("subtitleLabel"));
-    brandLayout->addWidget(subtitleLabel);
-    headerLayout->addLayout(brandLayout);
-    headerLayout->addStretch();
-    statusLabel_ = new QLabel(tr("正在监听"), centralWidget);
-    statusLabel_->setObjectName(QStringLiteral("statusLabel"));
-    statusLabel_->setAlignment(Qt::AlignCenter);
-    statusLabel_->setFixedSize(96, 32);
-    headerLayout->addWidget(statusLabel_, 0, Qt::AlignVCenter);
-    layout->addLayout(headerLayout);
-
-    auto* contentSection = makeSection(centralWidget);
+    auto* contentSection = makeSection(contentWidget);
     auto* contentLayout = new QVBoxLayout(contentSection);
-    contentLayout->setContentsMargins(20, 18, 20, 20);
-    contentLayout->setSpacing(12);
+    contentLayout->setContentsMargins(22, 20, 22, 22);
+    contentLayout->setSpacing(10);
     auto* contentHeader = new QHBoxLayout;
-    contentHeader->addWidget(makeSectionTitle(QStringLiteral("01"), tr("Content"), contentSection));
+    contentHeader->addWidget(makeSectionTitle(tr("Content"), contentSection));
     contentHeader->addStretch();
     contentEditButton_ = new QToolButton(contentSection);
     contentEditButton_->setObjectName(QStringLiteral("sectionAction"));
@@ -104,12 +91,12 @@ MainWindow::MainWindow(QWidget* parent)
     contentLayout->addWidget(contentEdit_);
     layout->addWidget(contentSection);
 
-    intentSection_ = makeSection(centralWidget);
+    intentSection_ = makeSection(contentWidget);
     auto* intentLayout = new QVBoxLayout(intentSection_);
-    intentLayout->setContentsMargins(20, 18, 20, 20);
-    intentLayout->setSpacing(12);
+    intentLayout->setContentsMargins(22, 20, 22, 22);
+    intentLayout->setSpacing(10);
     auto* intentHeader = new QHBoxLayout;
-    intentHeader->addWidget(makeSectionTitle(QStringLiteral("02"), tr("Intent"), intentSection_));
+    intentHeader->addWidget(makeSectionTitle(tr("Intent"), intentSection_));
     intentHeader->addStretch();
     auto* addFunctionButton = new QToolButton(intentSection_);
     addFunctionButton->setObjectName(QStringLiteral("sectionAction"));
@@ -131,12 +118,12 @@ MainWindow::MainWindow(QWidget* parent)
     intentSection_->hide();
     layout->addWidget(intentSection_);
 
-    resultSection_ = makeSection(centralWidget);
+    resultSection_ = makeSection(contentWidget);
     auto* resultLayout = new QVBoxLayout(resultSection_);
-    resultLayout->setContentsMargins(20, 18, 20, 20);
-    resultLayout->setSpacing(12);
+    resultLayout->setContentsMargins(22, 20, 22, 22);
+    resultLayout->setSpacing(10);
     auto* resultHeader = new QHBoxLayout;
-    resultHeader->addWidget(makeSectionTitle(QStringLiteral("03"), tr("Result"), resultSection_));
+    resultHeader->addWidget(makeSectionTitle(tr("Result"), resultSection_));
     resultHeader->addStretch();
     auto* regenerateResultButton = new QToolButton(resultSection_);
     regenerateResultButton->setObjectName(QStringLiteral("sectionAction"));
@@ -177,13 +164,10 @@ MainWindow::MainWindow(QWidget* parent)
         contentEdit_->setReadOnly(!beginEditing);
         contentEditButton_->setText(beginEditing ? tr("完成") : tr("编辑"));
         if (beginEditing) {
-            statusLabel_->setText(tr("编辑中"));
             contentEdit_->setFocus();
             QTextCursor cursor = contentEdit_->textCursor();
             cursor.movePosition(QTextCursor::End);
             contentEdit_->setTextCursor(cursor);
-        } else {
-            statusLabel_->setText(tr("已编辑"));
         }
     });
     intentButtonGroup_ = new QButtonGroup(this);
@@ -209,7 +193,6 @@ MainWindow::MainWindow(QWidget* parent)
             resultLoadingLabel_->setText(tr("执行失败：%1").arg(message));
             resultLoadingLabel_->show();
             resultSection_->show();
-            statusLabel_->setText(tr("执行失败"));
             updateExpandedSize();
         });
     connect(inferenceClient_, &InferenceClient::inferenceError, this, [this](const QString& message) {
@@ -217,33 +200,59 @@ MainWindow::MainWindow(QWidget* parent)
         resultLoadingLabel_->setText(tr("本地模型错误：%1").arg(message));
         resultLoadingLabel_->show();
         resultSection_->show();
-        statusLabel_->setText(tr("模型错误"));
         updateExpandedSize();
     });
 
 
 
-    setCentralWidget(centralWidget);
     setStyleSheet(QStringLiteral(R"(
-        #centralWidget { background-color: #f3f5f8; }
-        #titleLabel { color: #172033; font-size: 25px; font-weight: 650; }
-        #subtitleLabel, #sectionHint { color: #798394; font-size: 13px; }
-        #statusLabel { color: #2457a7; background-color: #e1ecff; border-radius: 16px; font-size: 12px; font-weight: 600; }
-        QFrame#section { background-color: white; border: 1px solid #dfe4eb; border-radius: 14px; }
-        #sectionTitle { color: #182230; font-size: 17px; font-weight: 650; }
-        #contentEdit { color: #182230; background-color: #f8fafc; border: 1px solid #e2e7ee; border-radius: 9px; padding: 12px; font-size: 14px; selection-background-color: #b9cff7; }
-        #loadingLabel { color: #52606d; font-size: 13px; }
-        QProgressBar { background-color: #e6ebf2; border: none; border-radius: 2px; }
-        QProgressBar::chunk { background-color: #3d72d7; border-radius: 2px; }
-        QToolButton#sectionAction { color: #2457a7; background-color: #eef4ff; border: 1px solid #cddcf5; border-radius: 7px; padding: 6px 11px; font-size: 12px; font-weight: 600; }
-        QToolButton#sectionAction:hover { background-color: #e1ecff; border-color: #9bb8e9; }
-        QToolButton#sectionAction:pressed { background-color: #d5e4fb; }
-        QToolButton#intentButton { color: #344054; background-color: #f8fafc; border: 1px solid #d9e0e9; border-radius: 9px; padding: 10px 14px; font-size: 13px; text-align: left; }
-        QToolButton#intentButton:hover { border-color: #8eace3; background-color: #f2f6fd; }
-        QToolButton#intentButton:checked { color: #174ea6; border: 1px solid #6790da; background-color: #eaf1ff; font-weight: 600; }
-        QFrame#resultCard { background-color: #f8fafc; border: 1px solid #e2e7ee; border-radius: 9px; }
-        QLabel#resultTitle { color: #2457a7; font-size: 13px; font-weight: 650; }
+        * { font-family: "Segoe UI", "Microsoft YaHei UI"; }
+        QDialog#mainDialog { background-color: #f6f7fb; }
+        #contentWidget { background: transparent; border: none; }
+        #sectionHint { color: #8a94a6; font-size: 12px; }
+        QFrame#section {
+            background-color: #ffffff;
+            border: 1px solid #e4e7ec;
+            border-radius: 13px;
+        }
+        #sectionTitle { color: #151b2b; font-size: 16px; font-weight: 700; }
+        #contentEdit {
+            color: #202939; background-color: #f8fafc;
+            border: 1px solid #e1e6ed; border-radius: 10px;
+            padding: 13px 14px; font-size: 14px;
+            selection-color: #172033; selection-background-color: #cfd9ff;
+        }
+        #contentEdit:focus { background-color: #ffffff; border: 1px solid #7892ea; }
+        #loadingLabel { color: #586174; font-size: 13px; }
+        QProgressBar { background-color: #e8ebf2; border: none; border-radius: 2px; }
+        QProgressBar::chunk { background-color: #526fd4; border-radius: 2px; }
+        QToolButton#sectionAction {
+            color: #3c56b5; background-color: #f2f4ff;
+            border: 1px solid #dce2fb; border-radius: 8px;
+            padding: 6px 12px; font-size: 12px; font-weight: 650;
+        }
+        QToolButton#sectionAction:hover { color: #2e46a4; background-color: #e8ecff; border-color: #c8d1f7; }
+        QToolButton#sectionAction:pressed { background-color: #dfe5ff; }
+        QToolButton#intentButton {
+            color: #465064; background-color: #f8f9fc;
+            border: 1px solid #e0e4eb; border-radius: 10px;
+            padding: 11px 14px; font-size: 13px; font-weight: 550;
+            text-align: center;
+        }
+        QToolButton#intentButton:hover { color: #334aa5; border-color: #aebced; background-color: #f3f5ff; }
+        QToolButton#intentButton:checked { color: #ffffff; border-color: #526fd4; background-color: #526fd4; font-weight: 700; }
+        QFrame#resultCard { background-color: #f8fafc; border: 1px solid #e2e6ed; border-radius: 10px; }
+        QLabel#resultTitle { color: #3e58ba; font-size: 13px; font-weight: 700; }
         QLabel#resultBody { color: #344054; font-size: 14px; }
+        QScrollArea#resultScrollArea { background: transparent; border: none; }
+        QScrollBar:vertical { background: transparent; width: 8px; margin: 2px 0; }
+        QScrollBar::handle:vertical { background: #c9ced8; border-radius: 4px; min-height: 28px; }
+        QScrollBar::handle:vertical:hover { background: #aeb5c2; }
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+        QMenu { color: #273043; background: #ffffff; border: 1px solid #dfe3ea; padding: 6px; }
+        QMenu::item { padding: 8px 22px 8px 12px; border-radius: 6px; }
+        QMenu::item:selected { color: #334aa5; background: #edf1ff; }
+        QMenu::separator { height: 1px; background: #eaecf0; margin: 5px 8px; }
     )"));
 }
 
@@ -254,7 +263,6 @@ void MainWindow::showClipboardText(const QString& text)
     contentEditButton_->setText(tr("编辑"));
     const QSignalBlocker blocker(contentEdit_);
     contentEdit_->setPlainText(text);
-    statusLabel_->setText(tr("已拾取"));
     showConfiguredFunctions();
     showPanel();
 }
@@ -299,7 +307,6 @@ void MainWindow::invalidateCacheForContentChange()
     resultLoadingLabel_->setText(tr("Content 已变化，请重新生成当前功能的结果。"));
     resultLoadingLabel_->show();
     resultSection_->show();
-    statusLabel_->setText(tr("内容已变化"));
     updateExpandedSize();
 }
 
@@ -345,7 +352,6 @@ bool MainWindow::saveFunctionConfig(const QString& successMessage)
         return false;
     }
     refreshFunctionButtonsPreservingState();
-    statusLabel_->setText(successMessage);
     return true;
 }
 
@@ -371,7 +377,6 @@ void MainWindow::addFunction()
     }
 
     refreshFunctionButtonsPreservingState();
-    statusLabel_->setText(tr("功能已添加"));
 }
 
 void MainWindow::editFunction(const QString& functionId)
@@ -429,7 +434,6 @@ void MainWindow::setDefaultFunction(const QString& functionId)
         button->setText(QStringLiteral("%1  %2").arg(
             marker, button->property("intentName").toString()));
     }
-    statusLabel_->setText(tr("默认功能已更新，下次调起生效"));
 }
 void MainWindow::showConfiguredFunctions()
 {
@@ -448,7 +452,6 @@ void MainWindow::showConfiguredFunctions()
         errorLabel->setWordWrap(true);
         intentOptionsLayout_->addWidget(errorLabel, 0, 0, 1, 5);
         intentOptions_->show();
-        statusLabel_->setText(tr("配置错误"));
         updateExpandedSize();
         return;
     }
@@ -517,7 +520,6 @@ void MainWindow::showFunctionOptions(const QStringList& functionIds,
     if (intentButtons_.isEmpty()) {
         auto* emptyLabel = new QLabel(tr("尚未配置功能，请点击“添加功能”。"), intentOptions_);
         intentOptionsLayout_->addWidget(emptyLabel, 0, 0, 1, 5);
-        statusLabel_->setText(tr("无可用功能"));
         updateExpandedSize();
         return;
     }
@@ -554,7 +556,6 @@ void MainWindow::beginFunctionExecution(bool forceRegeneration)
         resultLoadingLabel_->show();
         resultProgress_->hide();
         resultSection_->show();
-        statusLabel_->setText(tr("配置错误"));
         updateExpandedSize();
         return;
     }
@@ -565,7 +566,6 @@ void MainWindow::beginFunctionExecution(bool forceRegeneration)
     resultLoadingLabel_->show();
     resultProgress_->show();
     resultSection_->show();
-    statusLabel_->setText(forceRegeneration ? tr("重新生成中") : tr("执行中"));
     inferenceClient_->executeFunction(
         contentEdit_->toPlainText(), currentIntent_, definition->actionPrompt);
     updateExpandedSize();
@@ -595,21 +595,20 @@ void MainWindow::renderResult(const QString& intent, const QString& body)
     resultScrollArea_->setFixedHeight(resultHeight);
     resultScrollArea_->show();
     resultSection_->show();
-    statusLabel_->setText(tr("已完成"));
     updateExpandedSize();
 }
 
 void MainWindow::updateExpandedSize()
 {
     QTimer::singleShot(0, this, [this] {
-        if (!centralWidget()) return;
-        centralWidget()->layout()->activate();
+        if (!layout()) return;
+        layout()->activate();
         QScreen* targetScreen = screen();
         if (!targetScreen) targetScreen = QGuiApplication::primaryScreen();
         const QRect available = targetScreen
             ? targetScreen->availableGeometry().adjusted(24, 24, -24, -24)
             : QRect(0, 0, 1200, 900);
-        const int desiredHeight = centralWidget()->sizeHint().height();
+        const int desiredHeight = sizeHint().height();
         resize(width(), qBound(minimumHeight(), desiredHeight, available.height()));
         if (frameGeometry().bottom() > available.bottom())
             move(x(), available.bottom() - frameGeometry().height() + 1);

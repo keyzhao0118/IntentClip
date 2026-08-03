@@ -13,16 +13,24 @@ PromptSettingsDialog::PromptSettingsDialog(const IntentDefinition& definition, Q
     , id_(definition.id)
 {
     setWindowTitle(tr("编辑功能"));
-    resize(640, 430);
-    setMinimumSize(520, 360);
+    setObjectName(QStringLiteral("promptSettingsDialog"));
+    resize(660, 460);
+    setMinimumSize(540, 380);
 
     auto* layout = new QVBoxLayout(this);
+    layout->setContentsMargins(28, 26, 28, 24);
+    layout->setSpacing(18);
     auto* explanation = new QLabel(
         tr("修改功能在 Intent 区显示的名称、说明，以及点击后发送给本地模型的执行提示词。"), this);
+    explanation->setObjectName(QStringLiteral("dialogExplanation"));
     explanation->setWordWrap(true);
     layout->addWidget(explanation);
 
     auto* form = new QFormLayout;
+    form->setHorizontalSpacing(18);
+    form->setVerticalSpacing(14);
+    form->setLabelAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     name_ = new QLineEdit(definition.name, this);
     name_->setMaxLength(40);
     description_ = new QLineEdit(definition.description, this);
@@ -39,6 +47,43 @@ PromptSettingsDialog::PromptSettingsDialog(const IntentDefinition& definition, Q
     connect(buttons, &QDialogButtonBox::accepted, this, &PromptSettingsDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     layout->addWidget(buttons);
+
+    setStyleSheet(QStringLiteral(R"(
+        QDialog#promptSettingsDialog {
+            color: #202939;
+            background-color: #f6f7fb;
+            font-family: "Segoe UI", "Microsoft YaHei UI";
+            font-size: 13px;
+        }
+        QLabel { color: #344054; font-weight: 600; }
+        QLabel#dialogExplanation {
+            color: #667085; background-color: #eef1f7;
+            border: 1px solid #e0e4eb; border-radius: 10px;
+            padding: 12px 14px; font-weight: 400;
+        }
+        QLineEdit, QPlainTextEdit {
+            color: #202939; background-color: #ffffff;
+            border: 1px solid #dfe3ea; border-radius: 9px;
+            padding: 9px 11px; selection-background-color: #cfd9ff;
+        }
+        QLineEdit { min-height: 20px; }
+        QLineEdit:focus, QPlainTextEdit:focus { border: 1px solid #7892ea; }
+        QPushButton {
+            min-width: 76px; padding: 8px 15px;
+            color: #344054; background-color: #ffffff;
+            border: 1px solid #d8dde6; border-radius: 8px;
+            font-weight: 600;
+        }
+        QPushButton:hover { background-color: #f4f6f9; border-color: #bdc5d1; }
+        QPushButton:default {
+            color: #ffffff; background-color: #526fd4;
+            border-color: #526fd4;
+        }
+        QPushButton:default:hover { background-color: #465fc0; border-color: #465fc0; }
+        QScrollBar:vertical { background: transparent; width: 8px; }
+        QScrollBar::handle:vertical { background: #c9ced8; border-radius: 4px; min-height: 28px; }
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+    )"));
 }
 
 IntentDefinition PromptSettingsDialog::definition() const

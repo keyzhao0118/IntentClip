@@ -2,7 +2,7 @@
 
 #include <QHash>
 #include <QList>
-#include <QMainWindow>
+#include <QDialog>
 
 #include "intent_prompt_config.h"
 
@@ -19,7 +19,7 @@ class QToolButton;
 class QTextEdit;
 class QVBoxLayout;
 
-class MainWindow final : public QMainWindow
+class MainWindow final : public QDialog
 {
 public:
     explicit MainWindow(QWidget* parent = nullptr);
@@ -48,7 +48,6 @@ private:
 
     IntentPromptConfig promptConfig_;
     InferenceClient* inferenceClient_ = nullptr;
-    QLabel* statusLabel_ = nullptr;
     QTextEdit* contentEdit_ = nullptr;
     QToolButton* contentEditButton_ = nullptr;
     QFrame* intentSection_ = nullptr;
