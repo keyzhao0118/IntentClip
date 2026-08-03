@@ -15,3 +15,7 @@
 # Runtime files
 *.log
 *.dmp
+
+# Local model weights
+/models/*.gguf
+/models/.cache/

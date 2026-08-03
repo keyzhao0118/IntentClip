@@ -10,7 +10,8 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Widgets)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Widgets Network)
+find_package(llama CONFIG REQUIRED)
 
 if(WIN32)
     find_package(Qt6QWindowsIntegrationPlugin CONFIG REQUIRED
@@ -22,6 +23,8 @@ endif()
 qt_standard_project_setup(REQUIRES 6.5)
 
 qt_add_executable(IntentClip
+    app/inference_client.cpp
+    app/inference_client.h
     app/copy_gesture_monitor.cpp
     app/copy_gesture_monitor.h
     app/main.cpp
@@ -32,6 +35,7 @@ qt_add_executable(IntentClip
 target_link_libraries(IntentClip
     PRIVATE
         Qt6::Widgets
+        Qt6::Network
 )
 
 if(WIN32)
@@ -47,11 +51,26 @@ if(WIN32)
     )
 endif()
 
+
+qt_add_executable(IntentClipInference
+    worker/main.cpp
+)
+
+target_link_libraries(IntentClipInference
+    PRIVATE
+        Qt6::Core
+        Qt6::Network
+        llama
+)
+
+set_target_properties(IntentClipInference PROPERTIES
+    WIN32_EXECUTABLE TRUE
+)
 set_target_properties(IntentClip PROPERTIES
     WIN32_EXECUTABLE TRUE
 )
 
-install(TARGETS IntentClip
+install(TARGETS IntentClip IntentClipInference
     BUNDLE DESTINATION .
     RUNTIME DESTINATION bin
 )

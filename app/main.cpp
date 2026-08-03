@@ -4,9 +4,12 @@
 #include <QAction>
 #include <QApplication>
 #include <QClipboard>
+#include <QDir>
 #include <QIcon>
+#include <QLockFile>
 #include <QMenu>
 #include <QPainter>
+#include <QStandardPaths>
 #include <QSystemTrayIcon>
 #include <QTimer>
 
@@ -38,6 +41,12 @@ int main(int argc, char* argv[])
     QApplication::setApplicationName(QStringLiteral("IntentClip"));
     QApplication::setOrganizationName(QStringLiteral("IntentClip"));
     QApplication::setQuitOnLastWindowClosed(false);
+
+    const QString lockPath = QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation))
+        .filePath(QStringLiteral("IntentClip-single-instance.lock"));
+    QLockFile instanceLock(lockPath);
+    instanceLock.setStaleLockTime(0);
+    if (!instanceLock.tryLock(0)) return 0;
 
     MainWindow window;
     const QIcon icon = createTrayIcon();
@@ -89,13 +98,10 @@ int main(int argc, char* argv[])
         const bool clipboardUpdated = true;
 #endif
         if (!clipboardUpdated && clipboardPollsRemaining > 0) return;
-        clipboardTimer.stop();
         const QString text = QApplication::clipboard()->text().trimmed();
-        if (!text.isEmpty()) {
-            window.showClipboardText(text);
-        } else {
-            tray.showMessage(QStringLiteral("IntentClip"), QStringLiteral("剪贴板中没有可读取的文本。"));
-        }
+        if (text.isEmpty() && clipboardPollsRemaining > 0) return;
+        clipboardTimer.stop();
+        if (!text.isEmpty()) window.showClipboardText(text);
     });
 
     tray.show();

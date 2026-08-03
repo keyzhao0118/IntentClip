@@ -1,5 +1,7 @@
 #include "main_window.h"
 
+#include "inference_client.h"
+
 #include <QButtonGroup>
 #include <QCloseEvent>
 #include <QFrame>
@@ -189,10 +191,18 @@ MainWindow::MainWindow(QWidget* parent)
         if (!currentIntent_.isEmpty()) beginFunctionExecution(true);
     });
 
-    intentTimer_ = new QTimer(this);
-    intentTimer_->setSingleShot(true);
-    intentTimer_->setInterval(900);
-    connect(intentTimer_, &QTimer::timeout, this, [this] { showIntentOptions(); });
+    inferenceClient_ = new InferenceClient(this);
+    connect(inferenceClient_, &InferenceClient::intentsReady, this, [this](const QStringList& intents) {
+        showIntentOptions(intents);
+    });
+    connect(inferenceClient_, &InferenceClient::inferenceError, this, [this](const QString& message) {
+        intentProgress_->hide();
+        intentLoadingLabel_->setText(tr("识别失败：%1").arg(message));
+        intentLoadingLabel_->show();
+        statusLabel_->setText(tr("模型错误"));
+        updateExpandedSize();
+    });
+
     resultTimer_ = new QTimer(this);
     resultTimer_->setSingleShot(true);
     resultTimer_->setInterval(1100);
@@ -262,7 +272,6 @@ void MainWindow::showPanel()
 
 void MainWindow::beginIntentRecognition()
 {
-    intentTimer_->stop();
     resultTimer_->stop();
     clearLayout(intentOptionsLayout_);
     intentButtons_.clear();
@@ -270,22 +279,21 @@ void MainWindow::beginIntentRecognition()
     currentIntent_.clear();
     clearLayout(resultContentLayout_);
     intentOptions_->hide();
+    intentLoadingLabel_->setText(tr("正在由 Qwen3-0.6B 识别意图…"));
     intentLoadingLabel_->show();
     intentProgress_->show();
     intentSection_->show();
     resultSection_->hide();
     statusLabel_->setText(tr("识别中"));
-    intentTimer_->start();
+    inferenceClient_->recognizeIntents(contentEdit_->toPlainText());
     updateExpandedSize();
 }
 
-void MainWindow::showIntentOptions()
+void MainWindow::showIntentOptions(const QStringList& options)
 {
     intentLoadingLabel_->hide();
     intentProgress_->hide();
-    const QStringList options = {
-        tr("总结要点"), tr("润色改写"), tr("翻译为英文"), tr("提取行动项"), tr("生成回复")
-    };
+
     for (const QString& option : options) {
         auto* button = new QToolButton(intentOptions_);
         button->setObjectName(QStringLiteral("intentButton"));

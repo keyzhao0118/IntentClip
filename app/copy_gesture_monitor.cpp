@@ -39,6 +39,7 @@ void CopyGestureMonitor::setPaused(bool paused)
 #ifdef Q_OS_WIN
     lastCopyTime_ = 0;
     cIsDown_ = false;
+    ctrlIsDown_ = false;
 #endif
 }
 
@@ -52,14 +53,23 @@ LRESULT CALLBACK CopyGestureMonitor::keyboardProc(int code, WPARAM message, LPAR
 
 void CopyGestureMonitor::handleKeyboardEvent(WPARAM message, const KBDLLHOOKSTRUCT& event)
 {
-    if (paused_ || event.vkCode != 'C') return;
-    if (message == WM_KEYUP || message == WM_SYSKEYUP) {
+    if (paused_ || (event.flags & LLKHF_INJECTED) != 0) return;
+
+    const bool keyDown = message == WM_KEYDOWN || message == WM_SYSKEYDOWN;
+    const bool keyUp = message == WM_KEYUP || message == WM_SYSKEYUP;
+    if (event.vkCode == VK_CONTROL || event.vkCode == VK_LCONTROL || event.vkCode == VK_RCONTROL) {
+        if (keyDown) ctrlIsDown_ = true;
+        if (keyUp) ctrlIsDown_ = false;
+        return;
+    }
+    if (event.vkCode != 'C') return;
+    if (keyUp) {
         cIsDown_ = false;
         return;
     }
-    if ((message != WM_KEYDOWN && message != WM_SYSKEYDOWN) || cIsDown_) return;
+    if (!keyDown || cIsDown_) return;
     cIsDown_ = true;
-    if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) == 0) {
+    if (!ctrlIsDown_) {
         lastCopyTime_ = 0;
         return;
     }

@@ -27,6 +27,7 @@ private:
     HHOOK hook_ = nullptr;
     ULONGLONG lastCopyTime_ = 0;
     bool cIsDown_ = false;
+    bool ctrlIsDown_ = false;
 #endif
     bool paused_ = false;
 };
