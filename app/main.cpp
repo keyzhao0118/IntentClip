@@ -62,18 +62,14 @@ int main(int argc, char* argv[])
 #endif
 
     QObject::connect(openAction, &QAction::triggered, &window, [&window] {
-        window.showNormal();
-        window.raise();
-        window.activateWindow();
+        window.showPanel();
     });
     QObject::connect(pauseAction, &QAction::toggled, &monitor, &CopyGestureMonitor::setPaused);
     QObject::connect(quitAction, &QAction::triggered, &application, &QApplication::quit);
     QObject::connect(&tray, &QSystemTrayIcon::activated, &window,
         [&window](QSystemTrayIcon::ActivationReason reason) {
             if (reason == QSystemTrayIcon::DoubleClick) {
-                window.showNormal();
-                window.raise();
-                window.activateWindow();
+                window.showPanel();
             }
         });
     QObject::connect(&monitor, &CopyGestureMonitor::copyGestureDetected, &application, [&](unsigned long sequence) {
