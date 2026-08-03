@@ -61,6 +61,11 @@ InferenceClient::InferenceClient(QObject* parent)
     });
 }
 
+void InferenceClient::invalidateExecution()
+{
+    latestExecution_ = ++generation_;
+    pendingRequests_.clear();
+}
 void InferenceClient::executeFunction(
     const QString& text,
     const QString& intentId,

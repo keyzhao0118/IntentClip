@@ -15,6 +15,7 @@ class InferenceClient final : public QObject
 public:
     explicit InferenceClient(QObject* parent = nullptr);
 
+    void invalidateExecution();
     void executeFunction(
         const QString& text,
         const QString& intentId,

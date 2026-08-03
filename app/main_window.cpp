@@ -16,6 +16,7 @@
 #include <QProgressBar>
 #include <QScrollArea>
 #include <QScreen>
+#include <QSignalBlocker>
 #include <QTextCursor>
 #include <QTextEdit>
 #include <QTimer>
@@ -192,6 +193,8 @@ MainWindow::MainWindow(QWidget* parent)
     });
 
     inferenceClient_ = new InferenceClient(this);
+    connect(contentEdit_, &QTextEdit::textChanged,
+        this, &MainWindow::invalidateCacheForContentChange);
     connect(inferenceClient_, &InferenceClient::resultReady, this,
         [this](const QString& intentId, const QString& result) {
             resultCache_.insert(intentId, result);
@@ -246,8 +249,10 @@ MainWindow::MainWindow(QWidget* parent)
 
 void MainWindow::showClipboardText(const QString& text)
 {
+    invalidateCacheForContentChange();
     contentEdit_->setReadOnly(true);
     contentEditButton_->setText(tr("编辑"));
+    const QSignalBlocker blocker(contentEdit_);
     contentEdit_->setPlainText(text);
     statusLabel_->setText(tr("已拾取"));
     showConfiguredFunctions();
@@ -282,6 +287,56 @@ void MainWindow::showPanel()
 #endif
 }
 
+void MainWindow::invalidateCacheForContentChange()
+{
+    resultCache_.clear();
+    if (inferenceClient_) inferenceClient_->invalidateExecution();
+    if (!intentSection_->isVisible()) return;
+
+    clearLayout(resultContentLayout_);
+    resultScrollArea_->hide();
+    resultProgress_->hide();
+    resultLoadingLabel_->setText(tr("Content 已变化，请重新生成当前功能的结果。"));
+    resultLoadingLabel_->show();
+    resultSection_->show();
+    statusLabel_->setText(tr("内容已变化"));
+    updateExpandedSize();
+}
+
+void MainWindow::refreshFunctionButtonsPreservingState()
+{
+    const QString previousSelection = currentIntent_;
+    QString selectedFunctionId = previousSelection;
+    if (!promptConfig_.findById(selectedFunctionId)) {
+        selectedFunctionId = promptConfig_.findById(promptConfig_.defaultFunctionId)
+            ? promptConfig_.defaultFunctionId
+            : (promptConfig_.intents.isEmpty() ? QString() : promptConfig_.intents.first().id);
+        currentIntent_ = selectedFunctionId;
+    }
+
+    clearLayout(intentOptionsLayout_);
+    intentButtons_.clear();
+    QStringList functionIds;
+    for (const IntentDefinition& definition : promptConfig_.intents)
+        functionIds.append(definition.id);
+    const bool executeFirstFunction = previousSelection.isEmpty()
+        && !selectedFunctionId.isEmpty();
+    showFunctionOptions(functionIds, selectedFunctionId, executeFirstFunction);
+
+    if (selectedFunctionId != previousSelection) {
+        if (resultCache_.contains(selectedFunctionId)) {
+            const IntentDefinition* definition = promptConfig_.findById(selectedFunctionId);
+            renderResult(definition ? definition->name : selectedFunctionId,
+                resultCache_.value(selectedFunctionId));
+        } else {
+            clearLayout(resultContentLayout_);
+            resultScrollArea_->hide();
+            resultProgress_->hide();
+            resultLoadingLabel_->hide();
+            resultSection_->hide();
+        }
+    }
+}
 bool MainWindow::saveFunctionConfig(const QString& successMessage)
 {
     QString error;
@@ -289,8 +344,8 @@ bool MainWindow::saveFunctionConfig(const QString& successMessage)
         QMessageBox::warning(this, tr("配置无效"), error);
         return false;
     }
+    refreshFunctionButtonsPreservingState();
     statusLabel_->setText(successMessage);
-    showConfiguredFunctions();
     return true;
 }
 
@@ -304,10 +359,19 @@ void MainWindow::addFunction()
     };
     PromptSettingsDialog dialog(definition, this);
     if (dialog.exec() != QDialog::Accepted) return;
+    const IntentPromptConfig previousConfig = promptConfig_;
     promptConfig_.intents.append(dialog.definition());
     if (promptConfig_.defaultFunctionId.isEmpty())
         promptConfig_.defaultFunctionId = promptConfig_.intents.constLast().id;
-    saveFunctionConfig(tr("功能已添加"));
+    QString error;
+    if (!promptConfig_.save(&error)) {
+        promptConfig_ = previousConfig;
+        QMessageBox::warning(this, tr("配置无效"), error);
+        return;
+    }
+
+    refreshFunctionButtonsPreservingState();
+    statusLabel_->setText(tr("功能已添加"));
 }
 
 void MainWindow::editFunction(const QString& functionId)
@@ -344,15 +408,33 @@ void MainWindow::deleteFunction(const QString& functionId)
 
 void MainWindow::setDefaultFunction(const QString& functionId)
 {
-    if (!promptConfig_.findById(functionId)) return;
+    if (!promptConfig_.findById(functionId)
+        || promptConfig_.defaultFunctionId == functionId) return;
+
+    const QString previousDefaultId = promptConfig_.defaultFunctionId;
     promptConfig_.defaultFunctionId = functionId;
-    saveFunctionConfig(tr("默认功能已更新"));
+    QString error;
+    if (!promptConfig_.save(&error)) {
+        promptConfig_.defaultFunctionId = previousDefaultId;
+        QMessageBox::warning(this, tr("配置无效"), error);
+        return;
+    }
+
+    for (QToolButton* button : intentButtons_) {
+        const bool isDefault = button->property("intentId").toString() == functionId;
+        button->setProperty("isDefault", isDefault);
+        const QString marker = button->isChecked()
+            ? QStringLiteral("●")
+            : (isDefault ? QStringLiteral("★") : QStringLiteral("○"));
+        button->setText(QStringLiteral("%1  %2").arg(
+            marker, button->property("intentName").toString()));
+    }
+    statusLabel_->setText(tr("默认功能已更新，下次调起生效"));
 }
 void MainWindow::showConfiguredFunctions()
 {
     clearLayout(intentOptionsLayout_);
     intentButtons_.clear();
-    resultCache_.clear();
     currentIntent_.clear();
     clearLayout(resultContentLayout_);
     intentOptions_->hide();
@@ -377,9 +459,11 @@ void MainWindow::showConfiguredFunctions()
     showFunctionOptions(functionIds);
 }
 
-void MainWindow::showFunctionOptions(const QStringList& functionIds)
+void MainWindow::showFunctionOptions(const QStringList& functionIds,
+    const QString& selectedFunctionId, bool executeSelection)
 {
     QToolButton* defaultButton = nullptr;
+    QToolButton* selectedButton = nullptr;
     for (const QString& functionId : functionIds) {
         const IntentDefinition* definition = promptConfig_.findById(functionId);
         if (!definition) continue;
@@ -426,7 +510,8 @@ void MainWindow::showFunctionOptions(const QStringList& functionIds)
         const int position = static_cast<int>(intentButtons_.size());
         intentButtons_.append(button);
         intentOptionsLayout_->addWidget(button, position / 5, position % 5);
-        if ((definition->id == promptConfig_.defaultFunctionId)) defaultButton = button;
+        if (definition->id == promptConfig_.defaultFunctionId) defaultButton = button;
+        if (definition->id == selectedFunctionId) selectedButton = button;
     }
     intentOptions_->show();
     if (intentButtons_.isEmpty()) {
@@ -437,7 +522,16 @@ void MainWindow::showFunctionOptions(const QStringList& functionIds)
         return;
     }
 
-    (defaultButton ? defaultButton : intentButtons_.first())->setChecked(true);
+    QToolButton* targetButton = selectedButton
+        ? selectedButton : (defaultButton ? defaultButton : intentButtons_.first());
+    if (executeSelection) {
+        targetButton->setChecked(true);
+    } else {
+        const QSignalBlocker blocker(targetButton);
+        targetButton->setChecked(true);
+        targetButton->setText(QStringLiteral("●  %1")
+            .arg(targetButton->property("intentName").toString()));
+    }
     updateExpandedSize();
 }
 void MainWindow::selectIntent(const QString& intentId)

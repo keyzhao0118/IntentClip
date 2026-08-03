@@ -31,12 +31,15 @@ protected:
 
 private:
     void showConfiguredFunctions();
-    void showFunctionOptions(const QStringList& functionIds);
+    void showFunctionOptions(const QStringList& functionIds,
+        const QString& selectedFunctionId = {}, bool executeSelection = true);
     void addFunction();
     void editFunction(const QString& functionId);
     void deleteFunction(const QString& functionId);
     void setDefaultFunction(const QString& functionId);
     bool saveFunctionConfig(const QString& successMessage);
+    void refreshFunctionButtonsPreservingState();
+    void invalidateCacheForContentChange();
     void selectIntent(const QString& intent);
     void beginFunctionExecution(bool forceRegeneration = false);
     void renderResult(const QString& intent, const QString& body);
