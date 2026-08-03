@@ -31,6 +31,8 @@
 #include <windows.h>
 #endif
 
+constexpr int kContentViewportHeight = 160;
+constexpr int kResultViewportHeight = 180;
 namespace {
 QLabel* makeSectionTitle(const QString& title, QWidget* parent)
 {
@@ -58,6 +60,7 @@ MainWindow::MainWindow(QWidget* parent)
     setWindowTitle(tr("IntentClip · 拾意"));
     setObjectName(QStringLiteral("mainDialog"));
     setWindowFlag(Qt::WindowContextHelpButtonHint, false);
+    setWindowFlag(Qt::MSWindowsFixedSizeDialogHint, true);
     resize(760, 500);
     setMinimumSize(600, 460);
 
@@ -92,8 +95,9 @@ MainWindow::MainWindow(QWidget* parent)
     contentEdit_->setObjectName(QStringLiteral("contentEdit"));
     contentEdit_->setReadOnly(true);
     contentEdit_->setPlaceholderText(tr("双击 Ctrl+C 后，内容会出现在这里。"));
-    contentEdit_->setMinimumHeight(130);
-    contentEdit_->setMaximumHeight(220);
+    contentEdit_->setFixedHeight(kContentViewportHeight);
+    contentEdit_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    contentEdit_->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     contentLayout->addWidget(contentEdit_);
     layout->addWidget(contentSection);
 
@@ -104,13 +108,18 @@ MainWindow::MainWindow(QWidget* parent)
     auto* intentHeader = new QHBoxLayout;
     intentHeader->addWidget(makeSectionTitle(tr("Intent"), intentSection_));
     intentHeader->addStretch();
+    auto* restoreDefaultsButton = new QToolButton(intentSection_);
+    restoreDefaultsButton->setObjectName(QStringLiteral("sectionAction"));
+    restoreDefaultsButton->setText(tr("\u6062\u590d\u9ed8\u8ba4"));
+    restoreDefaultsButton->setToolTip(tr("\u6062\u590d\u5185\u7f6e\u7684 5 \u4e2a\u529f\u80fd\uff0c\u5e76\u5c06\u201c\u603b\u7ed3\u8981\u70b9\u201d\u8bbe\u4e3a\u9ed8\u8ba4"));
+    intentHeader->addWidget(restoreDefaultsButton);
     auto* addFunctionButton = new QToolButton(intentSection_);
     addFunctionButton->setObjectName(QStringLiteral("sectionAction"));
     addFunctionButton->setText(tr("＋ 添加功能"));
     addFunctionButton->setToolTip(tr("新增一个始终显示在 Intent 区的功能"));
     intentHeader->addWidget(addFunctionButton);
     intentLayout->addLayout(intentHeader);
-    auto* intentHint = new QLabel(tr("选择要执行的功能；面板打开时自动执行第一项。"), intentSection_);
+    auto* intentHint = new QLabel(tr("选择要执行的功能；面板打开时自动执行默认功能。"), intentSection_);
     intentHint->setObjectName(QStringLiteral("sectionHint"));
     intentLayout->addWidget(intentHint);
     intentOptions_ = new QFrame(intentSection_);
@@ -129,7 +138,8 @@ MainWindow::MainWindow(QWidget* parent)
     resultLayout->setContentsMargins(22, 20, 22, 22);
     resultLayout->setSpacing(10);
     auto* resultHeader = new QHBoxLayout;
-    resultHeader->addWidget(makeSectionTitle(tr("Result"), resultSection_));
+    resultTitleLabel_ = makeSectionTitle(tr("\u7ed3\u679c"), resultSection_);
+    resultHeader->addWidget(resultTitleLabel_);
     resultHeader->addStretch();
     auto* regenerateResultButton = new QToolButton(resultSection_);
     regenerateResultButton->setObjectName(QStringLiteral("sectionAction"));
@@ -138,20 +148,30 @@ MainWindow::MainWindow(QWidget* parent)
     resultHeader->addWidget(regenerateResultButton);
     resultLayout->addLayout(resultHeader);
     resultLoadingLabel_ = new QLabel(tr("正在执行所选 AI 功能…"), resultSection_);
+    resultLoadingContainer_ = new QFrame(resultSection_);
+    resultLoadingContainer_->setFixedHeight(kResultViewportHeight);
+    auto* resultLoadingLayout = new QVBoxLayout(resultLoadingContainer_);
+    resultLoadingLayout->setContentsMargins(14, 12, 14, 14);
+    resultLoadingLayout->setSpacing(12);
+    resultLoadingLayout->addStretch();
     resultLoadingLabel_->setObjectName(QStringLiteral("loadingLabel"));
-    resultLayout->addWidget(resultLoadingLabel_);
-    resultProgress_ = new QProgressBar(resultSection_);
+    resultLoadingLabel_->setAlignment(Qt::AlignCenter);
+    resultLoadingLabel_->setWordWrap(true);
+    resultLoadingLayout->addWidget(resultLoadingLabel_);
+    resultProgress_ = new QProgressBar(resultLoadingContainer_);
     resultProgress_->setRange(0, 0);
     resultProgress_->setTextVisible(false);
     resultProgress_->setFixedHeight(4);
-    resultLayout->addWidget(resultProgress_);
+    resultLoadingLayout->addWidget(resultProgress_);
+    resultLoadingLayout->addStretch();
+    resultLayout->addWidget(resultLoadingContainer_);
     resultScrollArea_ = new QScrollArea(resultSection_);
     resultScrollArea_->setObjectName(QStringLiteral("resultScrollArea"));
     resultScrollArea_->setWidgetResizable(true);
     resultScrollArea_->setFrameShape(QFrame::NoFrame);
     resultScrollArea_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     resultScrollArea_->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    resultScrollArea_->setMaximumHeight(280);
+    resultScrollArea_->setFixedHeight(kResultViewportHeight);
     resultContent_ = new QFrame(resultScrollArea_);
     resultContent_->setObjectName(QStringLiteral("resultContent"));
     resultContentLayout_ = new QVBoxLayout(resultContent_);
@@ -165,6 +185,7 @@ MainWindow::MainWindow(QWidget* parent)
 
     promptConfig_ = IntentPromptConfig::load();
     connect(addFunctionButton, &QToolButton::clicked, this, &MainWindow::addFunction);
+    connect(restoreDefaultsButton, &QToolButton::clicked, this, &MainWindow::restoreDefaultFunctions);
     connect(contentEditButton_, &QToolButton::clicked, this, [this] {
         const bool beginEditing = contentEdit_->isReadOnly();
         contentEdit_->setReadOnly(!beginEditing);
@@ -200,9 +221,6 @@ MainWindow::MainWindow(QWidget* parent)
             } else {
                 resultBodyLabel_->setText(partialResult);
                 resultContent_->adjustSize();
-                const int resultHeight = qBound(
-                    90, resultContentLayout_->sizeHint().height(), 280);
-                resultScrollArea_->setFixedHeight(resultHeight);
                 resultScrollArea_->show();
                 resultSection_->show();
                 updateExpandedSize();
@@ -219,17 +237,11 @@ MainWindow::MainWindow(QWidget* parent)
     connect(inferenceClient_, &InferenceClient::executionError, this,
         [this](const QString& intentId, const QString& message) {
             if (intentId != currentIntent_) return;
-            resultProgress_->hide();
-            resultLoadingLabel_->setText(tr("执行失败：%1").arg(message));
-            resultLoadingLabel_->show();
-            resultSection_->show();
+            showResultStatus(tr("执行失败：%1").arg(message), false);
             updateExpandedSize();
         });
     connect(inferenceClient_, &InferenceClient::inferenceError, this, [this](const QString& message) {
-        resultProgress_->hide();
-        resultLoadingLabel_->setText(tr("本地模型错误：%1").arg(message));
-        resultLoadingLabel_->show();
-        resultSection_->show();
+        showResultStatus(tr("本地模型错误：%1").arg(message), false);
         updateExpandedSize();
     });
 
@@ -272,7 +284,6 @@ MainWindow::MainWindow(QWidget* parent)
         QToolButton#intentButton:hover { color: #334aa5; border-color: #aebced; background-color: #f3f5ff; }
         QToolButton#intentButton:checked { color: #ffffff; border-color: #526fd4; background-color: #526fd4; font-weight: 700; }
         QFrame#resultCard { background-color: #f8fafc; border: 1px solid #e2e6ed; border-radius: 10px; }
-        QLabel#resultTitle { color: #3e58ba; font-size: 13px; font-weight: 700; }
         QLabel#resultBody { color: #344054; font-size: 14px; }
         QScrollArea#resultScrollArea { background: transparent; border: none; }
         QScrollBar:vertical { background: transparent; width: 8px; margin: 2px 0; }
@@ -334,11 +345,7 @@ void MainWindow::invalidateCacheForContentChange()
     if (!intentSection_->isVisible() || !hadResultState) return;
 
     clearLayout(resultContentLayout_);
-    resultScrollArea_->hide();
-    resultProgress_->hide();
-    resultLoadingLabel_->setText(tr("Content 已变化，请重新生成当前功能的结果。"));
-    resultLoadingLabel_->show();
-    resultSection_->show();
+    showResultStatus(tr("Content 已变化，请重新生成当前功能的结果。"), false);
     updateExpandedSize();
 }
 
@@ -385,6 +392,32 @@ bool MainWindow::saveFunctionConfig(const QString& successMessage)
     }
     refreshFunctionButtonsPreservingState();
     return true;
+}
+
+void MainWindow::restoreDefaultFunctions()
+{
+    const auto answer = QMessageBox::question(
+        this,
+        tr("\u6062\u590d\u9ed8\u8ba4\u529f\u80fd"),
+        tr("\u8fd9\u4f1a\u5220\u9664\u5f53\u524d\u81ea\u5b9a\u4e49\u529f\u80fd\u5e76\u6062\u590d\u5185\u7f6e\u7684 5 \u4e2a\u529f\u80fd\uff0c\u662f\u5426\u7ee7\u7eed\uff1f"),
+        QMessageBox::Yes | QMessageBox::No,
+        QMessageBox::No);
+    if (answer != QMessageBox::Yes) return;
+
+    IntentPromptConfig defaults = IntentPromptConfig::defaults();
+    QString error;
+    if (!defaults.save(&error)) {
+        QMessageBox::warning(
+            this,
+            tr("\u6062\u590d\u5931\u8d25"),
+            tr("\u65e0\u6cd5\u4fdd\u5b58\u9ed8\u8ba4\u529f\u80fd\u914d\u7f6e\uff1a%1").arg(error));
+        return;
+    }
+
+    if (inferenceClient_) inferenceClient_->invalidateExecution();
+    resultCache_.clear();
+    streamingIntent_.clear();
+    showConfiguredFunctions(true);
 }
 
 void MainWindow::addFunction()
@@ -588,11 +621,9 @@ void MainWindow::beginFunctionExecution(bool forceRegeneration)
     }
 
     const IntentDefinition* definition = promptConfig_.findById(currentIntent_);
+    resultTitleLabel_->setText(definition ? definition->name : currentIntent_);
     if (!definition || definition->actionPrompt.trimmed().isEmpty()) {
-        resultLoadingLabel_->setText(tr("功能执行提示词为空。"));
-        resultLoadingLabel_->show();
-        resultProgress_->hide();
-        resultSection_->show();
+        showResultStatus(tr("功能执行提示词为空。"), false);
         updateExpandedSize();
         return;
     }
@@ -600,26 +631,20 @@ void MainWindow::beginFunctionExecution(bool forceRegeneration)
     streamingIntent_ = currentIntent_;
     resultBodyLabel_.clear();
     clearLayout(resultContentLayout_);
-    resultScrollArea_->hide();
-    resultLoadingLabel_->setText(tr("正在执行“%1”…").arg(definition->name));
-    resultLoadingLabel_->show();
-    resultProgress_->show();
-    resultSection_->show();
+    showResultStatus(tr("正在执行“%1”…").arg(definition->name), true);
     inferenceClient_->executeFunction(
         contentEdit_->toPlainText(), currentIntent_, definition->actionPrompt);
     updateExpandedSize();
 }
 void MainWindow::renderResult(const QString& intent, const QString& body)
 {
+    resultTitleLabel_->setText(intent);
     clearLayout(resultContentLayout_);
     auto* card = new QFrame(resultContent_);
     card->setObjectName(QStringLiteral("resultCard"));
     auto* cardLayout = new QVBoxLayout(card);
     cardLayout->setContentsMargins(14, 12, 14, 14);
     cardLayout->setSpacing(7);
-    auto* title = new QLabel(intent, card);
-    title->setObjectName(QStringLiteral("resultTitle"));
-    cardLayout->addWidget(title);
     auto* resultLabel = new QLabel(body, card);
     resultLabel->setObjectName(QStringLiteral("resultBody"));
     resultLabel->setWordWrap(true);
@@ -628,14 +653,21 @@ void MainWindow::renderResult(const QString& intent, const QString& body)
     resultBodyLabel_ = resultLabel;
     resultContentLayout_->addWidget(card);
 
-    resultLoadingLabel_->hide();
-    resultProgress_->hide();
+    resultLoadingContainer_->hide();
     resultContent_->adjustSize();
-    const int resultHeight = qBound(90, resultContentLayout_->sizeHint().height(), 280);
-    resultScrollArea_->setFixedHeight(resultHeight);
     resultScrollArea_->show();
     resultSection_->show();
     updateExpandedSize();
+}
+
+void MainWindow::showResultStatus(const QString& message, bool loading)
+{
+    resultLoadingLabel_->setText(message);
+    resultLoadingLabel_->show();
+    resultProgress_->setVisible(loading);
+    resultScrollArea_->hide();
+    resultLoadingContainer_->show();
+    resultSection_->show();
 }
 
 void MainWindow::updateExpandedSize()

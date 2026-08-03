@@ -35,6 +35,7 @@ private:
     void showFunctionOptions(const QStringList& functionIds,
         const QString& selectedFunctionId = {}, bool executeSelection = true);
     void addFunction();
+    void restoreDefaultFunctions();
     void editFunction(const QString& functionId);
     void deleteFunction(const QString& functionId);
     void setDefaultFunction(const QString& functionId);
@@ -44,6 +45,7 @@ private:
     void selectIntent(const QString& intent);
     void beginFunctionExecution(bool forceRegeneration = false);
     void renderResult(const QString& intent, const QString& body);
+    void showResultStatus(const QString& message, bool loading);
     void clearLayout(QLayout* layout);
     void updateExpandedSize();
 
@@ -56,8 +58,10 @@ private:
     QGridLayout* intentOptionsLayout_ = nullptr;
     QButtonGroup* intentButtonGroup_ = nullptr;
     QFrame* resultSection_ = nullptr;
+    QLabel* resultTitleLabel_ = nullptr;
     QProgressBar* resultProgress_ = nullptr;
     QLabel* resultLoadingLabel_ = nullptr;
+    QFrame* resultLoadingContainer_ = nullptr;
     QScrollArea* resultScrollArea_ = nullptr;
     QFrame* resultContent_ = nullptr;
     QVBoxLayout* resultContentLayout_ = nullptr;

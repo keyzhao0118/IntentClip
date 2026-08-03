@@ -122,7 +122,7 @@ QJsonObject IntentDefinition::toJson() const
 IntentPromptConfig IntentPromptConfig::defaults()
 {
     return {
-        QStringLiteral("generate_reply"),
+        QStringLiteral("summarize_points"),
         {
             {
                 QStringLiteral("generate_reply"),

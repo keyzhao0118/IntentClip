@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "default_function_id": "generate_reply",
+  "default_function_id": "summarize_points",
   "functions": [
     {
       "id": "generate_reply",
