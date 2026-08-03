@@ -88,12 +88,7 @@ if(WIN32)
     )
 endif()
 
-install(TARGETS IntentClip
-    BUNDLE DESTINATION .
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-)
-
-install(TARGETS IntentClipInference
+install(TARGETS IntentClip IntentClipInference
     RUNTIME_DEPENDENCIES
         PRE_EXCLUDE_REGEXES
             "api-ms-.*"
@@ -133,4 +128,5 @@ qt_generate_deploy_app_script(
     NO_TRANSLATIONS
 )
 
+install(CODE "set(QT_DEPLOY_PLUGINS_DIR \"${CMAKE_INSTALL_BINDIR}\")")
 install(SCRIPT ${intentclip_qt_deploy_script})
