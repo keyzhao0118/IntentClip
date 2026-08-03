@@ -34,6 +34,7 @@ qt_add_executable(IntentClip
     app/main_window.h
     app/prompt_settings_dialog.cpp
     app/prompt_settings_dialog.h
+    app/rounded_menu.h
 )
 
 target_link_libraries(IntentClip

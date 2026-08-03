@@ -2,6 +2,7 @@
 
 #include "inference_client.h"
 #include "prompt_settings_dialog.h"
+#include "rounded_menu.h"
 
 #include <QButtonGroup>
 #include <QCloseEvent>
@@ -43,6 +44,11 @@ QFrame* makeSection(QWidget* parent)
     auto* section = new QFrame(parent);
     section->setObjectName(QStringLiteral("section"));
     return section;
+}
+
+QString intentButtonText(const QString& name, bool isDefault)
+{
+    return isDefault ? QStringLiteral("%1  ·  默认").arg(name) : name;
 }
 }
 
@@ -168,7 +174,12 @@ MainWindow::MainWindow(QWidget* parent)
             QTextCursor cursor = contentEdit_->textCursor();
             cursor.movePosition(QTextCursor::End);
             contentEdit_->setTextCursor(cursor);
+            return;
         }
+
+        if (contentEdit_->toPlainText().trimmed().isEmpty()) return;
+        if (intentSection_->isHidden()) showConfiguredFunctions(false);
+        beginFunctionExecution(false);
     });
     intentButtonGroup_ = new QButtonGroup(this);
     intentButtonGroup_->setExclusive(true);
@@ -249,7 +260,7 @@ MainWindow::MainWindow(QWidget* parent)
         QScrollBar::handle:vertical { background: #c9ced8; border-radius: 4px; min-height: 28px; }
         QScrollBar::handle:vertical:hover { background: #aeb5c2; }
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-        QMenu { color: #273043; background: #ffffff; border: 1px solid #dfe3ea; padding: 6px; }
+        QMenu { color: #273043; background: #ffffff; border: 1px solid #dfe3ea; border-radius: 9px; padding: 6px; }
         QMenu::item { padding: 8px 22px 8px 12px; border-radius: 6px; }
         QMenu::item:selected { color: #334aa5; background: #edf1ff; }
         QMenu::separator { height: 1px; background: #eaecf0; margin: 5px 8px; }
@@ -269,6 +280,7 @@ void MainWindow::showClipboardText(const QString& text)
 
 void MainWindow::showPanel()
 {
+    if (intentSection_->isHidden()) showConfiguredFunctions(false);
     showNormal();
     updateExpandedSize();
 #ifdef Q_OS_WIN
@@ -297,9 +309,10 @@ void MainWindow::showPanel()
 
 void MainWindow::invalidateCacheForContentChange()
 {
+    const bool hadResultState = !resultCache_.isEmpty() || resultSection_->isVisible();
     resultCache_.clear();
     if (inferenceClient_) inferenceClient_->invalidateExecution();
-    if (!intentSection_->isVisible()) return;
+    if (!intentSection_->isVisible() || !hadResultState) return;
 
     clearLayout(resultContentLayout_);
     resultScrollArea_->hide();
@@ -428,14 +441,11 @@ void MainWindow::setDefaultFunction(const QString& functionId)
     for (QToolButton* button : intentButtons_) {
         const bool isDefault = button->property("intentId").toString() == functionId;
         button->setProperty("isDefault", isDefault);
-        const QString marker = button->isChecked()
-            ? QStringLiteral("●")
-            : (isDefault ? QStringLiteral("★") : QStringLiteral("○"));
-        button->setText(QStringLiteral("%1  %2").arg(
-            marker, button->property("intentName").toString()));
+        button->setText(intentButtonText(
+            button->property("intentName").toString(), isDefault));
     }
 }
-void MainWindow::showConfiguredFunctions()
+void MainWindow::showConfiguredFunctions(bool executeSelection)
 {
     clearLayout(intentOptionsLayout_);
     intentButtons_.clear();
@@ -459,7 +469,8 @@ void MainWindow::showConfiguredFunctions()
     QStringList functionIds;
     for (const IntentDefinition& definition : promptConfig_.intents)
         functionIds.append(definition.id);
-    showFunctionOptions(functionIds);
+    showFunctionOptions(functionIds, {},
+        executeSelection && !contentEdit_->toPlainText().trimmed().isEmpty());
 }
 
 void MainWindow::showFunctionOptions(const QStringList& functionIds,
@@ -481,16 +492,13 @@ void MainWindow::showFunctionOptions(const QStringList& functionIds,
         button->setToolTip(definition->description + tr("\n右键可编辑、设为默认或删除"));
         button->setToolButtonStyle(Qt::ToolButtonTextOnly);
         button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-        button->setText(QStringLiteral("%1  %2").arg(
-            (definition->id == promptConfig_.defaultFunctionId) ? QStringLiteral("★") : QStringLiteral("○"), definition->name));
+        button->setText(intentButtonText(definition->name,
+            definition->id == promptConfig_.defaultFunctionId));
         intentButtonGroup_->addButton(button);
         connect(button, &QToolButton::toggled, this, [this, button](bool checked) {
-            const QString name = button->property("intentName").toString();
-            const bool isDefault = button->property("isDefault").toBool();
-            button->setText(QStringLiteral("%1  %2").arg(
-                checked ? QStringLiteral("●")
-                        : (isDefault ? QStringLiteral("★") : QStringLiteral("○")),
-                name));
+            button->setText(intentButtonText(
+                button->property("intentName").toString(),
+                button->property("isDefault").toBool()));
             if (checked) selectIntent(button->property("intentId").toString());
         });
         connect(button, &QToolButton::customContextMenuRequested, this,
@@ -498,7 +506,7 @@ void MainWindow::showFunctionOptions(const QStringList& functionIds,
                 const QString functionId = button->property("intentId").toString();
                 const IntentDefinition* current = promptConfig_.findById(functionId);
                 if (!current) return;
-                QMenu menu(this);
+                RoundedMenu menu(this);
                 QAction* editAction = menu.addAction(tr("编辑功能"));
                 QAction* defaultAction = menu.addAction(
                     (current->id == promptConfig_.defaultFunctionId) ? tr("当前默认功能") : tr("设为默认功能"));
@@ -529,10 +537,12 @@ void MainWindow::showFunctionOptions(const QStringList& functionIds,
     if (executeSelection) {
         targetButton->setChecked(true);
     } else {
+        currentIntent_ = targetButton->property("intentId").toString();
         const QSignalBlocker blocker(targetButton);
         targetButton->setChecked(true);
-        targetButton->setText(QStringLiteral("●  %1")
-            .arg(targetButton->property("intentName").toString()));
+        targetButton->setText(intentButtonText(
+            targetButton->property("intentName").toString(),
+            targetButton->property("isDefault").toBool()));
     }
     updateExpandedSize();
 }
@@ -544,6 +554,14 @@ void MainWindow::selectIntent(const QString& intentId)
 void MainWindow::beginFunctionExecution(bool forceRegeneration)
 {
     if (currentIntent_.isEmpty()) return;
+    if (contentEdit_->toPlainText().trimmed().isEmpty()) {
+        contentEdit_->setReadOnly(false);
+        contentEditButton_->setText(tr("完成"));
+        contentEdit_->setFocus();
+        resultSection_->hide();
+        updateExpandedSize();
+        return;
+    }
     if (!forceRegeneration && resultCache_.contains(currentIntent_)) {
         const IntentDefinition* definition = promptConfig_.findById(currentIntent_);
         renderResult(definition ? definition->name : currentIntent_, resultCache_.value(currentIntent_));

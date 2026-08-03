@@ -1,5 +1,6 @@
 #include "copy_gesture_monitor.h"
 #include "main_window.h"
+#include "rounded_menu.h"
 
 #include <QAction>
 #include <QApplication>
@@ -54,11 +55,29 @@ int main(int argc, char* argv[])
 
     QSystemTrayIcon tray(icon);
     tray.setToolTip(QStringLiteral("IntentClip · 拾意"));
-    QMenu trayMenu;
+    RoundedMenu trayMenu;
+    trayMenu.setObjectName(QStringLiteral("trayMenu"));
+    trayMenu.setStyleSheet(QStringLiteral(R"(
+        QMenu#trayMenu {
+            color: #273043;
+            background-color: #ffffff;
+            border: 1px solid #dfe3ea;
+            border-radius: 9px;
+            padding: 6px;
+            font-family: "Segoe UI", "Microsoft YaHei UI";
+            font-size: 13px;
+        }
+        QMenu#trayMenu::item {
+            min-width: 112px;
+            padding: 9px 22px 9px 12px;
+            border-radius: 6px;
+        }
+        QMenu#trayMenu::item:selected {
+            color: #334aa5;
+            background-color: #edf1ff;
+        }
+    )"));
     QAction* openAction = trayMenu.addAction(QStringLiteral("打开面板"));
-    QAction* pauseAction = trayMenu.addAction(QStringLiteral("暂停双复制监听"));
-    pauseAction->setCheckable(true);
-    trayMenu.addSeparator();
     QAction* quitAction = trayMenu.addAction(QStringLiteral("退出"));
     tray.setContextMenu(&trayMenu);
 
@@ -73,7 +92,6 @@ int main(int argc, char* argv[])
     QObject::connect(openAction, &QAction::triggered, &window, [&window] {
         window.showPanel();
     });
-    QObject::connect(pauseAction, &QAction::toggled, &monitor, &CopyGestureMonitor::setPaused);
     QObject::connect(quitAction, &QAction::triggered, &application, &QApplication::quit);
     QObject::connect(&tray, &QSystemTrayIcon::activated, &window,
         [&window](QSystemTrayIcon::ActivationReason reason) {
@@ -106,8 +124,6 @@ int main(int argc, char* argv[])
 
     tray.show();
     if (!monitor.start()) {
-        pauseAction->setChecked(true);
-        pauseAction->setEnabled(false);
         tray.showMessage(QStringLiteral("IntentClip"), QStringLiteral("无法启用双复制监听，可从托盘手动打开面板。"));
     }
 

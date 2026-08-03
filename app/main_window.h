@@ -30,7 +30,7 @@ protected:
     void closeEvent(QCloseEvent* event) override;
 
 private:
-    void showConfiguredFunctions();
+    void showConfiguredFunctions(bool executeSelection = true);
     void showFunctionOptions(const QStringList& functionIds,
         const QString& selectedFunctionId = {}, bool executeSelection = true);
     void addFunction();
