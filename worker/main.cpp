@@ -7,6 +7,7 @@
 #include <QLocalSocket>
 #include <QSet>
 #include <QThread>
+#include <QTimer>
 
 #include <llama.h>
 
@@ -258,10 +259,10 @@ int main(int argc, char* argv[])
         loadError = QString::fromUtf8(exception.what());
     }
 
-    QObject::connect(&server, &QLocalServer::newConnection, &application, [&] {
+    const auto acceptPendingConnections = [&] {
         while (QLocalSocket* socket = server.nextPendingConnection()) {
             auto* buffer = new QByteArray;
-            QObject::connect(socket, &QLocalSocket::readyRead, socket, [socket, buffer, &engine, &loadError] {
+            const auto processRequests = [socket, buffer, &engine, &loadError] {
                 buffer->append(socket->readAll());
                 qsizetype newline = -1;
                 while ((newline = buffer->indexOf('\n')) >= 0) {
@@ -306,12 +307,21 @@ int main(int argc, char* argv[])
                     socket->write(QJsonDocument(response).toJson(QJsonDocument::Compact) + '\n');
                     socket->flush();
                 }
-            });
+            };
+            QObject::connect(socket, &QLocalSocket::readyRead, socket, processRequests);
+            // The UI can connect and send while the model is still loading. The bytes may
+            // already be buffered before readyRead is connected, so consume them explicitly.
+            QTimer::singleShot(0, socket, processRequests);
             QObject::connect(socket, &QLocalSocket::disconnected, socket, [socket, buffer] {
                 delete buffer;
                 socket->deleteLater();
             });
         }
-    });
+    };
+    QObject::connect(&server, &QLocalServer::newConnection,
+        &application, acceptPendingConnections);
+    // A client can connect while the model constructor blocks the event loop. Accept any
+    // connection already queued before the newConnection handler was installed.
+    QTimer::singleShot(0, &server, acceptPendingConnections);
     return application.exec();
 }
