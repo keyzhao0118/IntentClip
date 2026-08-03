@@ -2,6 +2,7 @@
 
 #include <QHash>
 #include <QList>
+#include <QPointer>
 #include <QDialog>
 
 #include "intent_prompt_config.h"
@@ -60,6 +61,8 @@ private:
     QScrollArea* resultScrollArea_ = nullptr;
     QFrame* resultContent_ = nullptr;
     QVBoxLayout* resultContentLayout_ = nullptr;
+    QPointer<QLabel> resultBodyLabel_;
+    QString streamingIntent_;
     QList<QToolButton*> intentButtons_;
     QHash<QString, QString> resultCache_;
     QString currentIntent_;

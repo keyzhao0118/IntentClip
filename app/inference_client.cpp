@@ -1,6 +1,7 @@
 #include "inference_client.h"
 
 #include <QCoreApplication>
+#include <QDebug>
 #include <QDir>
 #include <QFileInfo>
 #include <QJsonDocument>
@@ -39,16 +40,34 @@ InferenceClient::InferenceClient(QObject* parent)
             const QString type = response.value(QStringLiteral("type")).toString();
             const QString intentId = response.value(QStringLiteral("intent_id")).toString();
 
+            if (type == QStringLiteral("chunk") && responseId == latestExecution_) {
+                emit resultUpdated(intentId, response.value(QStringLiteral("result")).toString());
+                continue;
+            }
             if (type == QStringLiteral("error")) {
                 const QString message = response.value(QStringLiteral("message")).toString();
                 if (responseId == latestExecution_) emit executionError(intentId, message);
-                else emit inferenceError(message);
+                else if (responseId == 0) emit inferenceError(message);
                 continue;
             }
             if (type == QStringLiteral("result") && responseId == latestExecution_) {
                 const QString result = response.value(QStringLiteral("result")).toString().trimmed();
                 if (!result.isEmpty()) emit resultReady(intentId, result);
                 else emit executionError(intentId, tr("模型返回了空结果。"));
+
+                const QJsonObject metrics = response.value(QStringLiteral("metrics")).toObject();
+                if (!metrics.isEmpty()) {
+                    qInfo().noquote() << QStringLiteral(
+                        "IntentClip inference: load=%1 ms, prompt=%2 tokens/%3 ms, "
+                        "generation=%4 tokens/%5 ms, threads=%6, batch_threads=%7")
+                        .arg(metrics.value(QStringLiteral("model_load_ms")).toVariant().toLongLong())
+                        .arg(metrics.value(QStringLiteral("input_tokens")).toInt())
+                        .arg(metrics.value(QStringLiteral("prompt_ms")).toVariant().toLongLong())
+                        .arg(metrics.value(QStringLiteral("output_tokens")).toInt())
+                        .arg(metrics.value(QStringLiteral("generation_ms")).toVariant().toLongLong())
+                        .arg(metrics.value(QStringLiteral("threads")).toInt())
+                        .arg(metrics.value(QStringLiteral("batch_threads")).toInt());
+                }
             }
         }
     });
@@ -56,16 +75,28 @@ InferenceClient::InferenceClient(QObject* parent)
         emit inferenceError(tr("无法启动本地推理进程：%1").arg(worker_->errorString()));
     });
     connect(worker_, &QProcess::finished, this, [this](int exitCode, QProcess::ExitStatus status) {
+        connectTimer_->stop();
+        socket_->abort();
         if (status == QProcess::CrashExit || exitCode != 0)
             emit inferenceError(tr("本地推理进程已退出（代码 %1）。").arg(exitCode));
     });
+
+    QTimer::singleShot(0, this, &InferenceClient::startWorker);
 }
 
 void InferenceClient::invalidateExecution()
 {
     latestExecution_ = ++generation_;
     pendingRequests_.clear();
+    if (socket_->state() == QLocalSocket::ConnectedState) {
+        const QJsonObject cancelRequest{
+            {QStringLiteral("type"), QStringLiteral("cancel")}
+        };
+        socket_->write(QJsonDocument(cancelRequest).toJson(QJsonDocument::Compact) + '\n');
+        socket_->flush();
+    }
 }
+
 void InferenceClient::executeFunction(
     const QString& text,
     const QString& intentId,
@@ -82,6 +113,22 @@ void InferenceClient::executeFunction(
     enqueueRequest(request);
 }
 
+void InferenceClient::startWorker()
+{
+    if (worker_->state() != QProcess::NotRunning) return;
+    const QString executable = QDir(QCoreApplication::applicationDirPath())
+        .filePath(QStringLiteral("IntentClipInference.exe"));
+    worker_->setProgram(executable);
+    worker_->setArguments({
+        QStringLiteral("--server"), serverName_,
+        QStringLiteral("--model"), modelPath()
+    });
+    worker_->start();
+    connectionAttempts_ = 0;
+    connectTimer_->start();
+    ensureConnected();
+}
+
 void InferenceClient::enqueueRequest(const QJsonObject& request)
 {
     pendingRequests_.enqueue(QJsonDocument(request).toJson(QJsonDocument::Compact) + '\n');
@@ -89,18 +136,11 @@ void InferenceClient::enqueueRequest(const QJsonObject& request)
         sendPendingRequests();
         return;
     }
-    if (worker_->state() == QProcess::NotRunning) {
-        const QString executable = QDir(QCoreApplication::applicationDirPath())
-            .filePath(QStringLiteral("IntentClipInference.exe"));
-        worker_->setProgram(executable);
-        worker_->setArguments({
-            QStringLiteral("--server"), serverName_,
-            QStringLiteral("--model"), modelPath()
-        });
-        worker_->start();
+    startWorker();
+    if (!connectTimer_->isActive()) {
+        connectionAttempts_ = 0;
+        connectTimer_->start();
     }
-    connectionAttempts_ = 0;
-    connectTimer_->start();
     ensureConnected();
 }
 

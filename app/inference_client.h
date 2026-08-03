@@ -22,11 +22,13 @@ public:
         const QString& actionPrompt);
 
 signals:
+    void resultUpdated(const QString& intentId, const QString& partialResult);
     void resultReady(const QString& intentId, const QString& result);
     void executionError(const QString& intentId, const QString& message);
     void inferenceError(const QString& message);
 
 private:
+    void startWorker();
     void enqueueRequest(const QJsonObject& request);
     void ensureConnected();
     void sendPendingRequests();

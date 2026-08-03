@@ -190,11 +190,30 @@ MainWindow::MainWindow(QWidget* parent)
     inferenceClient_ = new InferenceClient(this);
     connect(contentEdit_, &QTextEdit::textChanged,
         this, &MainWindow::invalidateCacheForContentChange);
+    connect(inferenceClient_, &InferenceClient::resultUpdated, this,
+        [this](const QString& intentId, const QString& partialResult) {
+            if (intentId != currentIntent_ || partialResult.isEmpty()) return;
+            const IntentDefinition* definition = promptConfig_.findById(intentId);
+            if (streamingIntent_ != intentId || !resultBodyLabel_) {
+                streamingIntent_ = intentId;
+                renderResult(definition ? definition->name : intentId, partialResult);
+            } else {
+                resultBodyLabel_->setText(partialResult);
+                resultContent_->adjustSize();
+                const int resultHeight = qBound(
+                    90, resultContentLayout_->sizeHint().height(), 280);
+                resultScrollArea_->setFixedHeight(resultHeight);
+                resultScrollArea_->show();
+                resultSection_->show();
+                updateExpandedSize();
+            }
+        });
     connect(inferenceClient_, &InferenceClient::resultReady, this,
         [this](const QString& intentId, const QString& result) {
             resultCache_.insert(intentId, result);
             if (intentId != currentIntent_) return;
             const IntentDefinition* definition = promptConfig_.findById(intentId);
+            streamingIntent_.clear();
             renderResult(definition ? definition->name : intentId, result);
         });
     connect(inferenceClient_, &InferenceClient::executionError, this,
@@ -578,6 +597,8 @@ void MainWindow::beginFunctionExecution(bool forceRegeneration)
         return;
     }
 
+    streamingIntent_ = currentIntent_;
+    resultBodyLabel_.clear();
     clearLayout(resultContentLayout_);
     resultScrollArea_->hide();
     resultLoadingLabel_->setText(tr("正在执行“%1”…").arg(definition->name));
@@ -599,11 +620,12 @@ void MainWindow::renderResult(const QString& intent, const QString& body)
     auto* title = new QLabel(intent, card);
     title->setObjectName(QStringLiteral("resultTitle"));
     cardLayout->addWidget(title);
-    auto* result = new QLabel(body, card);
-    result->setObjectName(QStringLiteral("resultBody"));
-    result->setWordWrap(true);
-    result->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    cardLayout->addWidget(result);
+    auto* resultLabel = new QLabel(body, card);
+    resultLabel->setObjectName(QStringLiteral("resultBody"));
+    resultLabel->setWordWrap(true);
+    resultLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    cardLayout->addWidget(resultLabel);
+    resultBodyLabel_ = resultLabel;
     resultContentLayout_->addWidget(card);
 
     resultLoadingLabel_->hide();
