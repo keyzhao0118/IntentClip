@@ -6,19 +6,18 @@ project(IntentClip
     LANGUAGES CXX
 )
 
+include(GNUInstallDirs)
+
+if(POLICY CMP0207)
+    cmake_policy(SET CMP0207 NEW)
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(Qt6 6.5 REQUIRED COMPONENTS Widgets Network)
 find_package(llama CONFIG REQUIRED)
-
-if(WIN32)
-    find_package(Qt6QWindowsIntegrationPlugin CONFIG REQUIRED
-        HINTS "${Qt6Gui_DIR}"
-        NO_DEFAULT_PATH
-    )
-endif()
 
 qt_standard_project_setup(REQUIRES 6.5)
 
@@ -45,15 +44,6 @@ target_link_libraries(IntentClip
 
 if(WIN32)
     target_link_libraries(IntentClip PRIVATE user32)
-
-    add_custom_command(TARGET IntentClip POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory
-            "$<TARGET_FILE_DIR:IntentClip>/platforms"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "$<TARGET_FILE:Qt6::QWindowsIntegrationPlugin>"
-            "$<TARGET_FILE_DIR:IntentClip>/platforms/$<TARGET_FILE_NAME:Qt6::QWindowsIntegrationPlugin>"
-        COMMENT "Deploying the Qt Windows platform plugin"
-    )
 endif()
 
 
@@ -87,9 +77,60 @@ set_target_properties(IntentClip PROPERTIES
     WIN32_EXECUTABLE TRUE
 )
 
-install(TARGETS IntentClip IntentClipInference
+if(WIN32)
+    add_custom_command(TARGET IntentClip POST_BUILD
+        COMMAND "$<TARGET_FILE:Qt6::windeployqt>"
+            --no-translations
+            --dir "$<TARGET_FILE_DIR:IntentClip>"
+            "$<TARGET_FILE:IntentClip>"
+        COMMENT "Deploying the Qt runtime with windeployqt"
+        VERBATIM
+    )
+endif()
+
+install(TARGETS IntentClip
     BUNDLE DESTINATION .
-    RUNTIME DESTINATION bin
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
-install(FILES config/functions.default.json DESTINATION bin/config)
+install(TARGETS IntentClipInference
+    RUNTIME_DEPENDENCIES
+        PRE_EXCLUDE_REGEXES
+            "api-ms-.*"
+            "ext-ms-.*"
+        POST_EXCLUDE_REGEXES
+            ".*[Ww]indows[/\\\\][Ss]ystem32[/\\\\].*\\.dll"
+    BUNDLE DESTINATION .
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+install(
+    FILES config/functions.default.json
+    DESTINATION ${CMAKE_INSTALL_BINDIR}/config
+)
+
+set(INTENTCLIP_MODEL_FILE
+    "${CMAKE_CURRENT_SOURCE_DIR}/models/Qwen3-0.6B-Q8_0.gguf"
+    CACHE FILEPATH
+    "GGUF model bundled with IntentClip"
+)
+
+if(NOT EXISTS "${INTENTCLIP_MODEL_FILE}")
+    message(FATAL_ERROR
+        "IntentClip model not found: ${INTENTCLIP_MODEL_FILE}\n"
+        "Download Qwen3-0.6B-Q8_0.gguf before configuring the package."
+    )
+endif()
+
+install(
+    FILES "${INTENTCLIP_MODEL_FILE}"
+    DESTINATION ${CMAKE_INSTALL_BINDIR}/models
+)
+
+qt_generate_deploy_app_script(
+    TARGET IntentClip
+    OUTPUT_SCRIPT intentclip_qt_deploy_script
+    NO_TRANSLATIONS
+)
+
+install(SCRIPT ${intentclip_qt_deploy_script})
