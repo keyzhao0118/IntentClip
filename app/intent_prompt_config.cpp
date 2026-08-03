@@ -153,8 +153,15 @@ IntentPromptConfig IntentPromptConfig::load(QString* errorMessage)
         return initial;
     }
 
-    const QFileInfoList files = directory.entryInfoList(
+    const QDir persistentDirectory(directory.filePath(QStringLiteral("persistent")));
+    const QDir customDirectory(directory.filePath(QStringLiteral("custom")));
+    QFileInfoList files = persistentDirectory.entryInfoList(
         {QStringLiteral("*.json")}, QDir::Files | QDir::Readable, QDir::Name);
+    files.append(customDirectory.entryInfoList(
+        {QStringLiteral("*.json")}, QDir::Files | QDir::Readable, QDir::Name));
+    // Read legacy flat files last. Nested files win if a previous migration was interrupted.
+    files.append(directory.entryInfoList(
+        {QStringLiteral("*.json")}, QDir::Files | QDir::Readable, QDir::Name));
     if (files.isEmpty()) {
         if (QFile::exists(directory.filePath(QStringLiteral(".initialized"))))
             return {};
@@ -176,6 +183,11 @@ IntentPromptConfig IntentPromptConfig::load(QString* errorMessage)
             errors.append(error);
             continue;
         }
+        const bool legacyFlatFile = file.dir().absolutePath() == directory.absolutePath();
+        if ((ids.contains(definition.id) || names.contains(definition.name)) && legacyFlatFile) {
+            needsMigration = true;
+            continue;
+        }
         if (ids.contains(definition.id) || names.contains(definition.name)) {
             errors.append(QStringLiteral("%1 的 id 或名称与其他功能重复。").arg(file.absoluteFilePath()));
             continue;
@@ -183,7 +195,10 @@ IntentPromptConfig IntentPromptConfig::load(QString* errorMessage)
         ids.insert(definition.id);
         names.insert(definition.name);
         config.intents.append(definition);
-        needsMigration = needsMigration || migrated;
+        const QString expectedDirectory = definition.persistent
+            ? persistentDirectory.absolutePath() : customDirectory.absolutePath();
+        needsMigration = needsMigration || migrated || legacyFlatFile
+            || file.dir().absolutePath() != expectedDirectory;
     }
     if (!errors.isEmpty() && errorMessage) *errorMessage = errors.join(QStringLiteral("\n"));
     if (config.intents.isEmpty() && errors.isEmpty()) {
@@ -199,20 +214,24 @@ bool IntentPromptConfig::save(QString* errorMessage) const
 {
     if (errorMessage) errorMessage->clear();
     QDir directory(directoryPath());
-    if (!directory.mkpath(QStringLiteral("."))) {
+    if (!directory.mkpath(QStringLiteral("persistent"))
+        || !directory.mkpath(QStringLiteral("custom"))) {
         if (errorMessage) *errorMessage = QStringLiteral("无法创建功能配置目录：%1").arg(directory.path());
         return false;
     }
+    QDir persistentDirectory(directory.filePath(QStringLiteral("persistent")));
+    QDir customDirectory(directory.filePath(QStringLiteral("custom")));
 
     QSaveFile marker(directory.filePath(QStringLiteral(".initialized")));
-    if (!marker.open(QIODevice::WriteOnly) || marker.write("2\n") < 0 || !marker.commit()) {
+    if (!marker.open(QIODevice::WriteOnly) || marker.write("3\n") < 0 || !marker.commit()) {
         if (errorMessage) *errorMessage = QStringLiteral("无法写入功能配置初始化标记。");
         return false;
     }
 
     QSet<QString> ids;
     QSet<QString> names;
-    QSet<QString> expectedFiles;
+    QSet<QString> expectedPersistentFiles;
+    QSet<QString> expectedCustomFiles;
     for (const IntentDefinition& definition : intents) {
         if (!isValidId(definition.id) || definition.name.trimmed().isEmpty()
             || definition.description.trimmed().isEmpty() || definition.actionPrompt.trimmed().isEmpty()
@@ -227,9 +246,12 @@ bool IntentPromptConfig::save(QString* errorMessage) const
         ids.insert(definition.id);
         names.insert(definition.name.trimmed());
         const QString fileName = definition.id + QStringLiteral(".json");
+        QDir& targetDirectory = definition.persistent ? persistentDirectory : customDirectory;
+        QSet<QString>& expectedFiles = definition.persistent
+            ? expectedPersistentFiles : expectedCustomFiles;
         expectedFiles.insert(fileName);
 
-        QSaveFile file(directory.filePath(fileName));
+        QSaveFile file(targetDirectory.filePath(fileName));
         if (!file.open(QIODevice::WriteOnly)
             || file.write(QJsonDocument(definition.toJson()).toJson(QJsonDocument::Indented)) < 0
             || !file.commit()) {
@@ -238,17 +260,34 @@ bool IntentPromptConfig::save(QString* errorMessage) const
         }
     }
 
-    const QFileInfoList existing = directory.entryInfoList(
+    const auto removeStaleFiles = [errorMessage](
+        const QDir& targetDirectory, const QSet<QString>& expectedFiles) {
+        const QFileInfoList existing = targetDirectory.entryInfoList(
+            {QStringLiteral("*.json")}, QDir::Files, QDir::Name);
+        for (const QFileInfo& file : existing) {
+            if (!expectedFiles.contains(file.fileName()) && !QFile::remove(file.absoluteFilePath())) {
+                if (errorMessage) *errorMessage = QStringLiteral("无法删除旧功能配置：%1")
+                    .arg(file.absoluteFilePath());
+                return false;
+            }
+        }
+        return true;
+    };
+    if (!removeStaleFiles(persistentDirectory, expectedPersistentFiles)
+        || !removeStaleFiles(customDirectory, expectedCustomFiles)) return false;
+
+    // Remove v2 files from the legacy flat layout only after every nested file is saved.
+    const QFileInfoList legacyFiles = directory.entryInfoList(
         {QStringLiteral("*.json")}, QDir::Files, QDir::Name);
-    for (const QFileInfo& file : existing) {
-        if (!expectedFiles.contains(file.fileName()) && !QFile::remove(file.absoluteFilePath())) {
-            if (errorMessage) *errorMessage = QStringLiteral("无法删除旧功能配置：%1").arg(file.absoluteFilePath());
+    for (const QFileInfo& file : legacyFiles) {
+        if (!QFile::remove(file.absoluteFilePath())) {
+            if (errorMessage) *errorMessage = QStringLiteral("无法迁移旧功能配置：%1")
+                .arg(file.absoluteFilePath());
             return false;
         }
     }
     return true;
 }
-
 QJsonObject IntentPromptConfig::toJson() const
 {
     QJsonArray array;

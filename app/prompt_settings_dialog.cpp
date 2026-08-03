@@ -23,7 +23,10 @@ PromptSettingsDialog::PromptSettingsDialog(const IntentPromptConfig& config, QWi
     setMinimumSize(680, 520);
 
     auto* layout = new QVBoxLayout(this);
-    auto* pathLabel = new QLabel(tr("每个功能保存为独立 JSON：%1").arg(IntentPromptConfig::directoryPath()), this);
+    auto* pathLabel = new QLabel(
+        tr("常驻功能：%1/persistent    自定义意图：%1/custom")
+            .arg(IntentPromptConfig::directoryPath()),
+        this);
     pathLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
     pathLabel->setWordWrap(true);
     layout->addWidget(pathLabel);
