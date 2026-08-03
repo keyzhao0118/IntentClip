@@ -14,7 +14,7 @@
 | 语言 | C++20 | 禁止依赖未标准化语言扩展作为核心逻辑 |
 | 构建 | CMake + Presets | Debug/Release、开发/商店打包必须可复现 |
 | 依赖 | vcpkg manifest mode | 锁定 baseline；CI 不跟随浮动 latest |
-| UI | Qt 6、Qt Quick/QML | QML 只负责展示与交互，业务逻辑在 C++ |
+| UI | Qt 6 Widgets | 界面使用 C++ Widget 类；视图与业务逻辑保持分层 |
 | 推理 | llama.cpp C API 适配层 | 上层不直接依赖 llama.cpp 类型 |
 | 模型 | GGUF，小型指令模型 | 具体权重经质量、性能、许可三道门禁后决定 |
 | 分发 | MSIX | Store identity、签名、升级和干净卸载 |
@@ -55,7 +55,7 @@ IntentClipInference.exe（工作进程）
 - `licensing`：权益抽象；核心业务不直接调用 Store API。
 - `diagnostics`：本地结构化事件；禁止记录原文和完整输出。
 
-每个模块通过接口或 DTO 交流。QML 不持有模型对象、线程对象或系统句柄。
+每个模块通过接口或 DTO 交流。Widget 不直接持有模型上下文、推理线程或系统钩子句柄；窗口只订阅应用状态并发送用户意图。
 
 ## 5. `Ctrl+C+C` 手势实现
 
@@ -118,7 +118,7 @@ IntentClipInference.exe（工作进程）
 
 ```text
 /
-├─ app/                 # 主程序与 QML
+├─ app/                 # 主程序与 Qt Widgets 界面
 ├─ worker/              # 推理工作进程
 ├─ libs/                # 领域与平台库
 ├─ tests/               # 单元、集成、基准数据

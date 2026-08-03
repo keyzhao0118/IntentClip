@@ -44,7 +44,7 @@ MSIX manifest 仅声明实际使用能力。应用不安装驱动或 NT Service�
 - [ ] Release 构建，版本号四段一致，Publisher 与 Partner Center identity 一致。
 - [ ] Windows App Certification Kit 通过。
 - [ ] 全新安装、升级、卸载、重装、标准用户、多显示器测试通过。
-- [ ] 所有 Qt DLL、平台插件、VC runtime、QML 模块和许可文件齐全。
+- [ ] 所有 Qt DLL、平台插件、VC runtime 和许可文件齐全。
 - [ ] 安装目录无模型缓存、调试日志、个人路径或测试密钥。
 
 ### 产品与 AI

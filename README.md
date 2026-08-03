@@ -9,7 +9,7 @@ IntentClip 是一款面向 Windows 的本地 AI 文本意图助手。用户通�
 ## 当前技术基线
 
 - C++20、CMake、vcpkg manifest mode
-- Qt 6 + Qt Quick/QML，C++ 承载业务与平台能力
+- Qt 6 Widgets，界面与业务均使用可直接维护的 C++ 类组织
 - llama.cpp 作为可替换的本地推理后端
 - Windows 10 22H2 / Windows 11，首发 x64
 - MSIX 作为 Microsoft Store 首选分发格式

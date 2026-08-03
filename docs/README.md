@@ -13,6 +13,7 @@
 7. [Microsoft Store 发布手册](06-store-release.md)：审核约束、素材、测试与提交流程。
 8. [路线图与质量门禁](07-roadmap.md)：里程碑、Definition of Done 和风险台账。
 9. [意图功能矩阵](08-intent-matrix.md)：候选功能、排序输入、执行模板与质量标准。
+10. [开发记录](development/README.md)：逐里程碑记录实际代码、构建、调试与验证过程。
 
 ## 决策记录
 
@@ -21,6 +22,7 @@
 - [ADR-0003：独立推理工作进程](decisions/ADR-0003-inference-worker.md)
 - [ADR-0004：MSIX 与模型交付分离](decisions/ADR-0004-packaging-and-model-delivery.md)
 - [ADR-0005：Ctrl+C+C 双复制触发手势](decisions/ADR-0005-copy-twice-gesture.md)
+- [ADR-0006：使用 Qt Widgets 实现 UI](decisions/ADR-0006-qt-widgets-ui.md)
 
 ## 决策状态约定
 

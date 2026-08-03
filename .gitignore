@@ -1,0 +1,17 @@
+# CMake build output
+/out/
+/build/
+
+# IDE and user-local configuration
+/.vs/
+/.vscode/
+/CMakeUserPresets.json
+*.user
+
+# Generated Qt files
+*.qmlc
+*.jsc
+
+# Runtime files
+*.log
+*.dmp
