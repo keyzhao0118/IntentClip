@@ -1,8 +1,0 @@
-{
-  "version": 2,
-  "id": "explain_content",
-  "kind": "persistent",
-  "name": "解释内容",
-  "description": "理解制度、术语、复杂要求和陌生材料。",
-  "action_prompt": "用通俗、准确的语言解释原文中的制度、术语和复杂要求；必要时拆解概念并说明实际影响。"
-}

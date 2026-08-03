@@ -13,7 +13,8 @@
 7. [Microsoft Store 发布手册](06-store-release.md)：审核约束、素材、测试与提交流程。
 8. [路线图与质量门禁](07-roadmap.md)：里程碑、Definition of Done 和风险台账。
 9. [意图功能矩阵](08-intent-matrix.md)：候选功能、排序输入、执行模板与质量标准。
-10. [开发记录](development/README.md)：逐里程碑记录实际代码、构建、调试与验证过程。
+10. [功能执行测试文本](09-function-execution-test-texts.md)：可直接复制的五项功能与右键管理测试用例。
+11. [开发记录](development/README.md)：逐里程碑记录实际代码、构建、调试与验证过程。
 
 ## 决策记录
 

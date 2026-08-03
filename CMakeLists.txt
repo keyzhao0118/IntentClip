@@ -57,12 +57,16 @@ endif()
 
 
 add_custom_command(TARGET IntentClip POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E remove_directory
+        "$<TARGET_FILE_DIR:IntentClip>/config/intents"
+    COMMAND ${CMAKE_COMMAND} -E rm -f
+        "$<TARGET_FILE_DIR:IntentClip>/config/intent_prompt.default.json"
     COMMAND ${CMAKE_COMMAND} -E make_directory
-        "$<TARGET_FILE_DIR:IntentClip>/config/intents"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_CURRENT_SOURCE_DIR}/config/intents"
-        "$<TARGET_FILE_DIR:IntentClip>/config/intents"
-    COMMENT "Deploying the default intent definition files"
+        "$<TARGET_FILE_DIR:IntentClip>/config"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/config/functions.default.json"
+        "$<TARGET_FILE_DIR:IntentClip>/config/functions.default.json"
+    COMMENT "Deploying the default function registry"
 )
 qt_add_executable(IntentClipInference
     worker/main.cpp
@@ -87,4 +91,4 @@ install(TARGETS IntentClip IntentClipInference
     RUNTIME DESTINATION bin
 )
 
-install(DIRECTORY config/intents DESTINATION bin/config)
+install(FILES config/functions.default.json DESTINATION bin/config)

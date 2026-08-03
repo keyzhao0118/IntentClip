@@ -15,7 +15,6 @@ class QGridLayout;
 class QLayout;
 class QProgressBar;
 class QScrollArea;
-class QTimer;
 class QToolButton;
 class QTextEdit;
 class QVBoxLayout;
@@ -31,8 +30,13 @@ protected:
     void closeEvent(QCloseEvent* event) override;
 
 private:
-    void beginIntentRecognition();
-    void showIntentOptions(const QStringList& options);
+    void showConfiguredFunctions();
+    void showFunctionOptions(const QStringList& functionIds);
+    void addFunction();
+    void editFunction(const QString& functionId);
+    void deleteFunction(const QString& functionId);
+    void setDefaultFunction(const QString& functionId);
+    bool saveFunctionConfig(const QString& successMessage);
     void selectIntent(const QString& intent);
     void beginFunctionExecution(bool forceRegeneration = false);
     void renderResult(const QString& intent, const QString& body);
@@ -45,8 +49,6 @@ private:
     QTextEdit* contentEdit_ = nullptr;
     QToolButton* contentEditButton_ = nullptr;
     QFrame* intentSection_ = nullptr;
-    QProgressBar* intentProgress_ = nullptr;
-    QLabel* intentLoadingLabel_ = nullptr;
     QFrame* intentOptions_ = nullptr;
     QGridLayout* intentOptionsLayout_ = nullptr;
     QButtonGroup* intentButtonGroup_ = nullptr;

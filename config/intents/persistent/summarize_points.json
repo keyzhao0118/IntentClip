@@ -1,8 +1,0 @@
-{
-  "version": 2,
-  "id": "summarize_points",
-  "kind": "persistent",
-  "name": "总结要点",
-  "description": "压缩长邮件、会议记录和材料。",
-  "action_prompt": "提炼原文的核心结论、关键背景和主要事项，使用简洁的分点结构输出，不遗漏重要限制与数字。"
-}

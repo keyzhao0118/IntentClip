@@ -1,8 +1,0 @@
-{
-  "version": 2,
-  "id": "polish_rewrite",
-  "kind": "persistent",
-  "name": "润色改写",
-  "description": "改善公文、邮件、汇报和通知的表达。",
-  "action_prompt": "在不改变原意和事实的前提下润色原文，改善措辞、语气、结构、专业性和可读性。直接输出完整改写稿。"
-}

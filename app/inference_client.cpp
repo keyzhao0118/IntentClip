@@ -3,7 +3,6 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
-#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLocalSocket>
@@ -38,29 +37,15 @@ InferenceClient::InferenceClient(QObject* parent)
             const QJsonObject response = document.object();
             const quint64 responseId = response.value(QStringLiteral("id")).toVariant().toULongLong();
             const QString type = response.value(QStringLiteral("type")).toString();
-            const QString requestType = response.value(QStringLiteral("request_type")).toString();
             const QString intentId = response.value(QStringLiteral("intent_id")).toString();
 
             if (type == QStringLiteral("error")) {
                 const QString message = response.value(QStringLiteral("message")).toString();
-                if (requestType == QStringLiteral("classify") && responseId == latestRecognition_)
-                    emit recognitionError(message);
-                else if (requestType == QStringLiteral("execute") && responseId == latestExecution_)
-                    emit executionError(intentId, message);
-                else
-                    emit inferenceError(message);
+                if (responseId == latestExecution_) emit executionError(intentId, message);
+                else emit inferenceError(message);
                 continue;
             }
-
-            if (type == QStringLiteral("intents") && responseId == latestRecognition_) {
-                QStringList intents;
-                for (const QJsonValue& value : response.value(QStringLiteral("intents")).toArray()) {
-                    const QString id = value.toString();
-                    if (!id.isEmpty()) intents.append(id);
-                }
-                if (!intents.isEmpty()) emit intentsReady(intents);
-                else emit recognitionError(tr("模型返回的自定义意图列表无效。"));
-            } else if (type == QStringLiteral("result") && responseId == latestExecution_) {
+            if (type == QStringLiteral("result") && responseId == latestExecution_) {
                 const QString result = response.value(QStringLiteral("result")).toString().trimmed();
                 if (!result.isEmpty()) emit resultReady(intentId, result);
                 else emit executionError(intentId, tr("模型返回了空结果。"));
@@ -74,18 +59,6 @@ InferenceClient::InferenceClient(QObject* parent)
         if (status == QProcess::CrashExit || exitCode != 0)
             emit inferenceError(tr("本地推理进程已退出（代码 %1）。").arg(exitCode));
     });
-}
-
-void InferenceClient::recognizeIntents(const QString& text, const QJsonObject& promptConfig)
-{
-    latestRecognition_ = ++generation_;
-    QJsonObject request{
-        {QStringLiteral("type"), QStringLiteral("classify")},
-        {QStringLiteral("id"), static_cast<qint64>(latestRecognition_)},
-        {QStringLiteral("text"), text.left(4000)},
-        {QStringLiteral("prompt_config"), promptConfig}
-    };
-    enqueueRequest(request);
 }
 
 void InferenceClient::executeFunction(
