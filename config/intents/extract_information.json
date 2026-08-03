@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "id": "extract_information",
+  "kind": "persistent",
+  "name": "提取信息",
+  "description": "整理时间、人员、事项、金额、联系方式等。",
+  "action_prompt": "从原文提取可核实的信息，按时间、地点、人员、事项、金额、联系方式、编号和截止日期等字段结构化整理；没有的字段不要编造。"
+}

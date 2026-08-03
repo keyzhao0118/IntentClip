@@ -6,6 +6,7 @@
 #include <QButtonGroup>
 #include <QCloseEvent>
 #include <QFrame>
+#include <QGridLayout>
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -127,9 +128,11 @@ MainWindow::MainWindow(QWidget* parent)
     intentLayout->addWidget(intentProgress_);
     intentOptions_ = new QFrame(intentSection_);
     intentOptions_->setObjectName(QStringLiteral("optionsFrame"));
-    intentOptionsLayout_ = new QVBoxLayout(intentOptions_);
+    intentOptionsLayout_ = new QGridLayout(intentOptions_);
     intentOptionsLayout_->setContentsMargins(0, 0, 0, 0);
-    intentOptionsLayout_->setSpacing(8);
+    intentOptionsLayout_->setHorizontalSpacing(8);
+    intentOptionsLayout_->setVerticalSpacing(8);
+    for (int column = 0; column < 5; ++column) intentOptionsLayout_->setColumnStretch(column, 1);
     intentLayout->addWidget(intentOptions_);
     intentSection_->hide();
     layout->addWidget(intentSection_);
@@ -212,18 +215,45 @@ MainWindow::MainWindow(QWidget* parent)
     connect(inferenceClient_, &InferenceClient::intentsReady, this, [this](const QStringList& intents) {
         showIntentOptions(intents);
     });
+    connect(inferenceClient_, &InferenceClient::recognitionError, this, [this](const QString& message) {
+        intentProgress_->hide();
+        intentLoadingLabel_->setText(tr("自定义意图识别失败：%1").arg(message));
+        intentLoadingLabel_->show();
+        statusLabel_->setText(tr("请选择"));
+        updateExpandedSize();
+    });
+    connect(inferenceClient_, &InferenceClient::resultReady, this,
+        [this](const QString& intentId, const QString& result) {
+            resultCache_.insert(intentId, result);
+            if (intentId != currentIntent_) return;
+            const IntentDefinition* definition = promptConfig_.findById(intentId);
+            renderResult(definition ? definition->name : intentId, result);
+        });
+    connect(inferenceClient_, &InferenceClient::executionError, this,
+        [this](const QString& intentId, const QString& message) {
+            if (intentId != currentIntent_) return;
+            resultProgress_->hide();
+            resultLoadingLabel_->setText(tr("执行失败：%1").arg(message));
+            resultLoadingLabel_->show();
+            resultSection_->show();
+            statusLabel_->setText(tr("执行失败"));
+            updateExpandedSize();
+        });
     connect(inferenceClient_, &InferenceClient::inferenceError, this, [this](const QString& message) {
         intentProgress_->hide();
-        intentLoadingLabel_->setText(tr("识别失败：%1").arg(message));
-        intentLoadingLabel_->show();
+        resultProgress_->hide();
+        if (resultSection_->isVisible()) {
+            resultLoadingLabel_->setText(tr("本地模型错误：%1").arg(message));
+            resultLoadingLabel_->show();
+        } else {
+            intentLoadingLabel_->setText(tr("本地模型错误：%1").arg(message));
+            intentLoadingLabel_->show();
+        }
         statusLabel_->setText(tr("模型错误"));
         updateExpandedSize();
     });
 
-    resultTimer_ = new QTimer(this);
-    resultTimer_->setSingleShot(true);
-    resultTimer_->setInterval(1100);
-    connect(resultTimer_, &QTimer::timeout, this, [this] { showResults(); });
+
 
     setCentralWidget(centralWidget);
     setStyleSheet(QStringLiteral(R"(
@@ -242,7 +272,7 @@ MainWindow::MainWindow(QWidget* parent)
         QToolButton#sectionAction { color: #2457a7; background-color: #eef4ff; border: 1px solid #cddcf5; border-radius: 7px; padding: 6px 11px; font-size: 12px; font-weight: 600; }
         QToolButton#sectionAction:hover { background-color: #e1ecff; border-color: #9bb8e9; }
         QToolButton#sectionAction:pressed { background-color: #d5e4fb; }
-        QToolButton#intentButton { color: #344054; background-color: #f8fafc; border: 1px solid #d9e0e9; border-radius: 9px; padding: 11px 14px; font-size: 14px; text-align: left; }
+        QToolButton#intentButton { color: #344054; background-color: #f8fafc; border: 1px solid #d9e0e9; border-radius: 9px; padding: 10px 14px; font-size: 13px; text-align: left; }
         QToolButton#intentButton:hover { border-color: #8eace3; background-color: #f2f6fd; }
         QToolButton#intentButton:checked { color: #174ea6; border: 1px solid #6790da; background-color: #eaf1ff; font-weight: 600; }
         QFrame#resultCard { background-color: #f8fafc; border: 1px solid #e2e7ee; border-radius: 9px; }
@@ -291,105 +321,115 @@ void MainWindow::showPanel()
 
 void MainWindow::beginIntentRecognition()
 {
-    resultTimer_->stop();
     clearLayout(intentOptionsLayout_);
     intentButtons_.clear();
     resultCache_.clear();
     currentIntent_.clear();
     clearLayout(resultContentLayout_);
     intentOptions_->hide();
-    intentLoadingLabel_->setText(tr("正在由 Qwen3-0.6B 识别意图…"));
-    intentLoadingLabel_->show();
-    intentProgress_->show();
+    intentLoadingLabel_->hide();
+    intentProgress_->hide();
     intentSection_->show();
     resultSection_->hide();
-    statusLabel_->setText(tr("识别中"));
+
     QString configError;
     promptConfig_ = IntentPromptConfig::load(&configError);
     if (!configError.isEmpty()) {
-        intentProgress_->hide();
         intentLoadingLabel_->setText(tr("配置错误：%1").arg(configError));
+        intentLoadingLabel_->show();
         statusLabel_->setText(tr("配置错误"));
         updateExpandedSize();
         return;
     }
-    inferenceClient_->recognizeIntents(contentEdit_->toPlainText(), promptConfig_.toJson());
+
+    QStringList persistentIds;
+    for (const IntentDefinition& definition : promptConfig_.persistentIntents())
+        persistentIds.append(definition.id);
+    showIntentOptions(persistentIds);
+
+    IntentPromptConfig customConfig;
+    customConfig.intents = promptConfig_.customIntents();
+    if (customConfig.intents.isEmpty()) {
+        statusLabel_->setText(tr("请选择"));
+        updateExpandedSize();
+        return;
+    }
+
+    intentLoadingLabel_->setText(tr("正在匹配自定义意图…"));
+    intentLoadingLabel_->show();
+    intentProgress_->show();
+    statusLabel_->setText(tr("识别自定义意图"));
+    inferenceClient_->recognizeIntents(contentEdit_->toPlainText(), customConfig.toJson());
     updateExpandedSize();
 }
-
-void MainWindow::showIntentOptions(const QStringList& options)
+void MainWindow::showIntentOptions(const QStringList& intentIds)
 {
     intentLoadingLabel_->hide();
     intentProgress_->hide();
+    for (const QString& intentId : intentIds) {
+        const IntentDefinition* definition = promptConfig_.findById(intentId);
+        if (!definition) continue;
 
-    for (const QString& option : options) {
         auto* button = new QToolButton(intentOptions_);
         button->setObjectName(QStringLiteral("intentButton"));
-        button->setText(QStringLiteral("○  %1").arg(option));
         button->setCheckable(true);
-        button->setProperty("intentName", option);
+        button->setProperty("intentId", definition->id);
+        button->setProperty("intentName", definition->name);
+        button->setToolTip(definition->description);
         button->setToolButtonStyle(Qt::ToolButtonTextOnly);
         button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        button->setText(QStringLiteral("○  %1").arg(definition->name));
         intentButtonGroup_->addButton(button);
         connect(button, &QToolButton::toggled, this, [this, button](bool checked) {
-            const QString intent = button->property("intentName").toString();
+            const QString name = button->property("intentName").toString();
             button->setText(QStringLiteral("%1  %2").arg(
-                checked ? QStringLiteral("●") : QStringLiteral("○"), intent));
-            if (checked) selectIntent(intent);
+                checked ? QStringLiteral("●") : QStringLiteral("○"), name));
+            if (checked) selectIntent(button->property("intentId").toString());
         });
+        const int position = static_cast<int>(intentButtons_.size());
         intentButtons_.append(button);
-        intentOptionsLayout_->addWidget(button);
+        intentOptionsLayout_->addWidget(button, position / 5, position % 5);
     }
     intentOptions_->show();
     statusLabel_->setText(tr("请选择"));
     updateExpandedSize();
 }
-
-void MainWindow::selectIntent(const QString& intent)
+void MainWindow::selectIntent(const QString& intentId)
 {
-    currentIntent_ = intent;
+    currentIntent_ = intentId;
     beginFunctionExecution(false);
 }
-
 void MainWindow::beginFunctionExecution(bool forceRegeneration)
 {
     if (currentIntent_.isEmpty()) return;
-    resultTimer_->stop();
     if (!forceRegeneration && resultCache_.contains(currentIntent_)) {
-        renderResult(currentIntent_, resultCache_.value(currentIntent_));
+        const IntentDefinition* definition = promptConfig_.findById(currentIntent_);
+        renderResult(definition ? definition->name : currentIntent_, resultCache_.value(currentIntent_));
+        return;
+    }
+
+    const IntentDefinition* definition = promptConfig_.findById(currentIntent_);
+    if (!definition || definition->actionPrompt.trimmed().isEmpty()) {
+        resultLoadingLabel_->setText(tr("功能执行提示词为空。"));
+        resultLoadingLabel_->show();
+        resultProgress_->hide();
+        resultSection_->show();
+        statusLabel_->setText(tr("配置错误"));
+        updateExpandedSize();
         return;
     }
 
     clearLayout(resultContentLayout_);
     resultScrollArea_->hide();
+    resultLoadingLabel_->setText(tr("正在执行“%1”…").arg(definition->name));
     resultLoadingLabel_->show();
     resultProgress_->show();
     resultSection_->show();
     statusLabel_->setText(forceRegeneration ? tr("重新生成中") : tr("执行中"));
-    resultTimer_->start();
+    inferenceClient_->executeFunction(
+        contentEdit_->toPlainText(), currentIntent_, definition->actionPrompt);
     updateExpandedSize();
 }
-
-void MainWindow::showResults()
-{
-    if (currentIntent_.isEmpty()) return;
-    const QString source = contentEdit_->toPlainText().simplified();
-    QString body;
-    if (currentIntent_ == tr("总结要点")) {
-        body = tr("核心内容：%1%2").arg(source.left(100), source.size() > 100 ? QStringLiteral("…") : QString());
-    } else if (currentIntent_ == tr("润色改写")) {
-        body = tr("建议改写：%1").arg(source);
-    } else if (currentIntent_ == tr("翻译为英文")) {
-        body = tr("[模拟翻译] English version of the selected content will appear here.");
-    } else if (currentIntent_ == tr("提取行动项")) {
-        body = tr("• 确认文本中的目标与责任人\n• 明确下一步行动与完成时间");
-    } else {
-        body = tr("建议回复：收到，我已了解以上内容，会按重点继续跟进并及时反馈。");
-    }
-    resultCache_.insert(currentIntent_, body);
-    renderResult(currentIntent_, body);
-}
-
 void MainWindow::renderResult(const QString& intent, const QString& body)
 {
     clearLayout(resultContentLayout_);
@@ -438,7 +478,7 @@ void MainWindow::updateExpandedSize()
     });
 }
 
-void MainWindow::clearLayout(QVBoxLayout* layout)
+void MainWindow::clearLayout(QLayout* layout)
 {
     while (QLayoutItem* item = layout->takeAt(0)) {
         delete item->widget();

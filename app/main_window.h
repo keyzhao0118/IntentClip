@@ -11,6 +11,8 @@ class QCloseEvent;
 class QFrame;
 class InferenceClient;
 class QLabel;
+class QGridLayout;
+class QLayout;
 class QProgressBar;
 class QScrollArea;
 class QTimer;
@@ -33,9 +35,8 @@ private:
     void showIntentOptions(const QStringList& options);
     void selectIntent(const QString& intent);
     void beginFunctionExecution(bool forceRegeneration = false);
-    void showResults();
     void renderResult(const QString& intent, const QString& body);
-    void clearLayout(QVBoxLayout* layout);
+    void clearLayout(QLayout* layout);
     void updateExpandedSize();
 
     IntentPromptConfig promptConfig_;
@@ -47,7 +48,7 @@ private:
     QProgressBar* intentProgress_ = nullptr;
     QLabel* intentLoadingLabel_ = nullptr;
     QFrame* intentOptions_ = nullptr;
-    QVBoxLayout* intentOptionsLayout_ = nullptr;
+    QGridLayout* intentOptionsLayout_ = nullptr;
     QButtonGroup* intentButtonGroup_ = nullptr;
     QFrame* resultSection_ = nullptr;
     QProgressBar* resultProgress_ = nullptr;
@@ -58,5 +59,4 @@ private:
     QList<QToolButton*> intentButtons_;
     QHash<QString, QString> resultCache_;
     QString currentIntent_;
-    QTimer* resultTimer_ = nullptr;
 };

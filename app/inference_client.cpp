@@ -23,7 +23,7 @@ InferenceClient::InferenceClient(QObject* parent)
     connect(socket_, &QLocalSocket::connected, this, [this] {
         connectTimer_->stop();
         connectionAttempts_ = 0;
-        sendPendingRequest();
+        sendPendingRequests();
     });
     connect(socket_, &QLocalSocket::readyRead, this, [this] {
         readBuffer_.append(socket_->readAll());
@@ -34,21 +34,37 @@ InferenceClient::InferenceClient(QObject* parent)
             QJsonParseError parseError;
             const QJsonDocument document = QJsonDocument::fromJson(line, &parseError);
             if (parseError.error != QJsonParseError::NoError || !document.isObject()) continue;
+
             const QJsonObject response = document.object();
-            if (response.value(QStringLiteral("id")).toVariant().toULongLong() != generation_) continue;
-            if (response.value(QStringLiteral("type")).toString() == QStringLiteral("error")) {
-                emit inferenceError(response.value(QStringLiteral("message")).toString());
+            const quint64 responseId = response.value(QStringLiteral("id")).toVariant().toULongLong();
+            const QString type = response.value(QStringLiteral("type")).toString();
+            const QString requestType = response.value(QStringLiteral("request_type")).toString();
+            const QString intentId = response.value(QStringLiteral("intent_id")).toString();
+
+            if (type == QStringLiteral("error")) {
+                const QString message = response.value(QStringLiteral("message")).toString();
+                if (requestType == QStringLiteral("classify") && responseId == latestRecognition_)
+                    emit recognitionError(message);
+                else if (requestType == QStringLiteral("execute") && responseId == latestExecution_)
+                    emit executionError(intentId, message);
+                else
+                    emit inferenceError(message);
                 continue;
             }
-            QStringList intents;
-            for (const QJsonValue& value : response.value(QStringLiteral("intents")).toArray()) {
-                const QString name = value.isObject()
-                    ? value.toObject().value(QStringLiteral("name")).toString()
-                    : value.toString();
-                if (!name.isEmpty()) intents.append(name);
+
+            if (type == QStringLiteral("intents") && responseId == latestRecognition_) {
+                QStringList intents;
+                for (const QJsonValue& value : response.value(QStringLiteral("intents")).toArray()) {
+                    const QString id = value.toString();
+                    if (!id.isEmpty()) intents.append(id);
+                }
+                if (!intents.isEmpty()) emit intentsReady(intents);
+                else emit recognitionError(tr("模型返回的自定义意图列表无效。"));
+            } else if (type == QStringLiteral("result") && responseId == latestExecution_) {
+                const QString result = response.value(QStringLiteral("result")).toString().trimmed();
+                if (!result.isEmpty()) emit resultReady(intentId, result);
+                else emit executionError(intentId, tr("模型返回了空结果。"));
             }
-            if (!intents.isEmpty()) emit intentsReady(intents);
-            else emit inferenceError(tr("模型返回的意图列表无效。"));
         }
     });
     connect(worker_, &QProcess::errorOccurred, this, [this](QProcess::ProcessError) {
@@ -62,22 +78,47 @@ InferenceClient::InferenceClient(QObject* parent)
 
 void InferenceClient::recognizeIntents(const QString& text, const QJsonObject& promptConfig)
 {
-    ++generation_;
-    QJsonObject request;
-    request.insert(QStringLiteral("type"), QStringLiteral("classify"));
-    request.insert(QStringLiteral("id"), static_cast<qint64>(generation_));
-    request.insert(QStringLiteral("text"), text.left(4000));
-    request.insert(QStringLiteral("prompt_config"), promptConfig);
-    pendingRequest_ = QJsonDocument(request).toJson(QJsonDocument::Compact) + '\n';
+    latestRecognition_ = ++generation_;
+    QJsonObject request{
+        {QStringLiteral("type"), QStringLiteral("classify")},
+        {QStringLiteral("id"), static_cast<qint64>(latestRecognition_)},
+        {QStringLiteral("text"), text.left(4000)},
+        {QStringLiteral("prompt_config"), promptConfig}
+    };
+    enqueueRequest(request);
+}
 
+void InferenceClient::executeFunction(
+    const QString& text,
+    const QString& intentId,
+    const QString& actionPrompt)
+{
+    latestExecution_ = ++generation_;
+    QJsonObject request{
+        {QStringLiteral("type"), QStringLiteral("execute")},
+        {QStringLiteral("id"), static_cast<qint64>(latestExecution_)},
+        {QStringLiteral("intent_id"), intentId},
+        {QStringLiteral("text"), text.left(4000)},
+        {QStringLiteral("action_prompt"), actionPrompt}
+    };
+    enqueueRequest(request);
+}
+
+void InferenceClient::enqueueRequest(const QJsonObject& request)
+{
+    pendingRequests_.enqueue(QJsonDocument(request).toJson(QJsonDocument::Compact) + '\n');
     if (socket_->state() == QLocalSocket::ConnectedState) {
-        sendPendingRequest();
+        sendPendingRequests();
         return;
     }
     if (worker_->state() == QProcess::NotRunning) {
-        const QString executable = QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("IntentClipInference.exe"));
+        const QString executable = QDir(QCoreApplication::applicationDirPath())
+            .filePath(QStringLiteral("IntentClipInference.exe"));
         worker_->setProgram(executable);
-        worker_->setArguments({QStringLiteral("--server"), serverName_, QStringLiteral("--model"), modelPath()});
+        worker_->setArguments({
+            QStringLiteral("--server"), serverName_,
+            QStringLiteral("--model"), modelPath()
+        });
         worker_->start();
     }
     connectionAttempts_ = 0;
@@ -87,21 +128,21 @@ void InferenceClient::recognizeIntents(const QString& text, const QJsonObject& p
 
 void InferenceClient::ensureConnected()
 {
-    if (socket_->state() == QLocalSocket::ConnectedState || socket_->state() == QLocalSocket::ConnectingState) return;
+    if (socket_->state() == QLocalSocket::ConnectedState
+        || socket_->state() == QLocalSocket::ConnectingState) return;
     socket_->abort();
     socket_->connectToServer(serverName_);
-    if (++connectionAttempts_ > 150) {
+    if (++connectionAttempts_ > 300) {
         connectTimer_->stop();
         emit inferenceError(tr("连接本地推理进程超时。"));
     }
 }
 
-void InferenceClient::sendPendingRequest()
+void InferenceClient::sendPendingRequests()
 {
-    if (pendingRequest_.isEmpty() || socket_->state() != QLocalSocket::ConnectedState) return;
-    socket_->write(pendingRequest_);
+    if (socket_->state() != QLocalSocket::ConnectedState) return;
+    while (!pendingRequests_.isEmpty()) socket_->write(pendingRequests_.dequeue());
     socket_->flush();
-    pendingRequest_.clear();
 }
 
 QString InferenceClient::modelPath() const
@@ -112,5 +153,6 @@ QString InferenceClient::modelPath() const
     const QDir appDirectory(QCoreApplication::applicationDirPath());
     const QString deployed = appDirectory.filePath(QStringLiteral("models/Qwen3-0.6B-Q8_0.gguf"));
     if (QFileInfo::exists(deployed)) return deployed;
-    return QDir::cleanPath(appDirectory.filePath(QStringLiteral("../../../models/Qwen3-0.6B-Q8_0.gguf")));
+    return QDir::cleanPath(
+        appDirectory.filePath(QStringLiteral("../../../models/Qwen3-0.6B-Q8_0.gguf")));
 }

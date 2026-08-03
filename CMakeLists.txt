@@ -58,11 +58,11 @@ endif()
 
 add_custom_command(TARGET IntentClip POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory
-        "$<TARGET_FILE_DIR:IntentClip>/config"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_CURRENT_SOURCE_DIR}/config/intent_prompt.default.json"
-        "$<TARGET_FILE_DIR:IntentClip>/config/intent_prompt.default.json"
-    COMMENT "Deploying the editable prompt configuration template"
+        "$<TARGET_FILE_DIR:IntentClip>/config/intents"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/config/intents"
+        "$<TARGET_FILE_DIR:IntentClip>/config/intents"
+    COMMENT "Deploying the default intent definition files"
 )
 qt_add_executable(IntentClipInference
     worker/main.cpp
@@ -87,4 +87,4 @@ install(TARGETS IntentClip IntentClipInference
     RUNTIME DESTINATION bin
 )
 
-install(FILES config/intent_prompt.default.json DESTINATION bin/config)
+install(DIRECTORY config/intents DESTINATION bin/config)

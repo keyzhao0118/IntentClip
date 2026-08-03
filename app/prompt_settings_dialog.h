@@ -3,9 +3,13 @@
 #include "intent_prompt_config.h"
 
 #include <QDialog>
+#include <QList>
 
+class QGroupBox;
+class QLineEdit;
 class QPlainTextEdit;
-class QSpinBox;
+class QVBoxLayout;
+class QWidget;
 
 class PromptSettingsDialog final : public QDialog
 {
@@ -17,10 +21,22 @@ protected:
     void accept() override;
 
 private:
-    void applyConfig(const IntentPromptConfig& config);
+    struct FunctionEditor {
+        QString id;
+        bool persistent = false;
+        QGroupBox* card = nullptr;
+        QLineEdit* name = nullptr;
+        QLineEdit* description = nullptr;
+        QPlainTextEdit* recommendationPrompt = nullptr;
+        QPlainTextEdit* actionPrompt = nullptr;
+    };
 
-    QPlainTextEdit* systemPromptEdit_ = nullptr;
-    QPlainTextEdit* userPromptEdit_ = nullptr;
-    QSpinBox* minimumIntentsSpin_ = nullptr;
-    QSpinBox* maximumIntentsSpin_ = nullptr;
+    QWidget* createCollectionPage(bool persistent);
+    void addFunctionEditor(const IntentDefinition& definition);
+    void removeFunctionEditor(QGroupBox* card);
+    void restorePersistentDefaults();
+
+    QVBoxLayout* persistentListLayout_ = nullptr;
+    QVBoxLayout* customListLayout_ = nullptr;
+    QList<FunctionEditor> editors_;
 };
