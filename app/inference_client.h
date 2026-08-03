@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QByteArray>
 
+class QJsonObject;
 class QLocalSocket;
 class QProcess;
 class QTimer;
@@ -12,7 +13,7 @@ class InferenceClient final : public QObject
     Q_OBJECT
 public:
     explicit InferenceClient(QObject* parent = nullptr);
-    void recognizeIntents(const QString& text);
+    void recognizeIntents(const QString& text, const QJsonObject& promptConfig);
 
 signals:
     void intentsReady(const QStringList& intents);

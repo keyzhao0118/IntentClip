@@ -4,6 +4,8 @@
 #include <QList>
 #include <QMainWindow>
 
+#include "intent_prompt_config.h"
+
 class QButtonGroup;
 class QCloseEvent;
 class QFrame;
@@ -36,6 +38,7 @@ private:
     void clearLayout(QVBoxLayout* layout);
     void updateExpandedSize();
 
+    IntentPromptConfig promptConfig_;
     InferenceClient* inferenceClient_ = nullptr;
     QLabel* statusLabel_ = nullptr;
     QTextEdit* contentEdit_ = nullptr;

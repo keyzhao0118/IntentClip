@@ -1,6 +1,7 @@
 #include "main_window.h"
 
 #include "inference_client.h"
+#include "prompt_settings_dialog.h"
 
 #include <QButtonGroup>
 #include <QCloseEvent>
@@ -66,6 +67,11 @@ MainWindow::MainWindow(QWidget* parent)
     brandLayout->addWidget(subtitleLabel);
     headerLayout->addLayout(brandLayout);
     headerLayout->addStretch();
+    auto* settingsButton = new QToolButton(centralWidget);
+    settingsButton->setObjectName(QStringLiteral("settingsButton"));
+    settingsButton->setText(tr("⚙ 设置"));
+    settingsButton->setToolTip(tr("编辑本地意图识别提示词"));
+    headerLayout->addWidget(settingsButton, 0, Qt::AlignVCenter);
     statusLabel_ = new QLabel(tr("正在监听"), centralWidget);
     statusLabel_->setObjectName(QStringLiteral("statusLabel"));
     statusLabel_->setAlignment(Qt::AlignCenter);
@@ -167,6 +173,17 @@ MainWindow::MainWindow(QWidget* parent)
     layout->addWidget(resultSection_);
     layout->addStretch();
 
+    promptConfig_ = IntentPromptConfig::load();
+    connect(settingsButton, &QToolButton::clicked, this, [this] {
+        QString loadError;
+        const IntentPromptConfig current = IntentPromptConfig::load(&loadError);
+        PromptSettingsDialog dialog(current, this);
+        if (dialog.exec() == QDialog::Accepted) {
+            promptConfig_ = dialog.config();
+            statusLabel_->setText(tr("设置已保存"));
+        }
+    });
+
     connect(contentEditButton_, &QToolButton::clicked, this, [this] {
         const bool beginEditing = contentEdit_->isReadOnly();
         contentEdit_->setReadOnly(!beginEditing);
@@ -214,6 +231,8 @@ MainWindow::MainWindow(QWidget* parent)
         #titleLabel { color: #172033; font-size: 25px; font-weight: 650; }
         #subtitleLabel, #sectionHint { color: #798394; font-size: 13px; }
         #statusLabel { color: #2457a7; background-color: #e1ecff; border-radius: 16px; font-size: 12px; font-weight: 600; }
+        QToolButton#settingsButton { color: #52606d; background: transparent; border: 1px solid transparent; border-radius: 7px; padding: 6px 10px; font-size: 12px; }
+        QToolButton#settingsButton:hover { color: #2457a7; background-color: #e9eef6; border-color: #d5dde8; }
         QFrame#section { background-color: white; border: 1px solid #dfe4eb; border-radius: 14px; }
         #sectionTitle { color: #182230; font-size: 17px; font-weight: 650; }
         #contentEdit { color: #182230; background-color: #f8fafc; border: 1px solid #e2e7ee; border-radius: 9px; padding: 12px; font-size: 14px; selection-background-color: #b9cff7; }
@@ -285,7 +304,16 @@ void MainWindow::beginIntentRecognition()
     intentSection_->show();
     resultSection_->hide();
     statusLabel_->setText(tr("识别中"));
-    inferenceClient_->recognizeIntents(contentEdit_->toPlainText());
+    QString configError;
+    promptConfig_ = IntentPromptConfig::load(&configError);
+    if (!configError.isEmpty()) {
+        intentProgress_->hide();
+        intentLoadingLabel_->setText(tr("配置错误：%1").arg(configError));
+        statusLabel_->setText(tr("配置错误"));
+        updateExpandedSize();
+        return;
+    }
+    inferenceClient_->recognizeIntents(contentEdit_->toPlainText(), promptConfig_.toJson());
     updateExpandedSize();
 }
 

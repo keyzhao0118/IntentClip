@@ -23,6 +23,8 @@ endif()
 qt_standard_project_setup(REQUIRES 6.5)
 
 qt_add_executable(IntentClip
+    app/intent_prompt_config.cpp
+    app/intent_prompt_config.h
     app/inference_client.cpp
     app/inference_client.h
     app/copy_gesture_monitor.cpp
@@ -30,6 +32,8 @@ qt_add_executable(IntentClip
     app/main.cpp
     app/main_window.cpp
     app/main_window.h
+    app/prompt_settings_dialog.cpp
+    app/prompt_settings_dialog.h
 )
 
 target_link_libraries(IntentClip
@@ -52,6 +56,14 @@ if(WIN32)
 endif()
 
 
+add_custom_command(TARGET IntentClip POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        "$<TARGET_FILE_DIR:IntentClip>/config"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/config/intent_prompt.default.json"
+        "$<TARGET_FILE_DIR:IntentClip>/config/intent_prompt.default.json"
+    COMMENT "Deploying the editable prompt configuration template"
+)
 qt_add_executable(IntentClipInference
     worker/main.cpp
 )
@@ -74,3 +86,5 @@ install(TARGETS IntentClip IntentClipInference
     BUNDLE DESTINATION .
     RUNTIME DESTINATION bin
 )
+
+install(FILES config/intent_prompt.default.json DESTINATION bin/config)

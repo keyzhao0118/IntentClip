@@ -41,9 +41,13 @@ InferenceClient::InferenceClient(QObject* parent)
                 continue;
             }
             QStringList intents;
-            for (const QJsonValue& value : response.value(QStringLiteral("intents")).toArray())
-                intents.append(value.toString());
-            if (intents.size() >= 3) emit intentsReady(intents);
+            for (const QJsonValue& value : response.value(QStringLiteral("intents")).toArray()) {
+                const QString name = value.isObject()
+                    ? value.toObject().value(QStringLiteral("name")).toString()
+                    : value.toString();
+                if (!name.isEmpty()) intents.append(name);
+            }
+            if (!intents.isEmpty()) emit intentsReady(intents);
             else emit inferenceError(tr("模型返回的意图列表无效。"));
         }
     });
@@ -56,13 +60,14 @@ InferenceClient::InferenceClient(QObject* parent)
     });
 }
 
-void InferenceClient::recognizeIntents(const QString& text)
+void InferenceClient::recognizeIntents(const QString& text, const QJsonObject& promptConfig)
 {
     ++generation_;
     QJsonObject request;
     request.insert(QStringLiteral("type"), QStringLiteral("classify"));
     request.insert(QStringLiteral("id"), static_cast<qint64>(generation_));
     request.insert(QStringLiteral("text"), text.left(4000));
+    request.insert(QStringLiteral("prompt_config"), promptConfig);
     pendingRequest_ = QJsonDocument(request).toJson(QJsonDocument::Compact) + '\n';
 
     if (socket_->state() == QLocalSocket::ConnectedState) {
