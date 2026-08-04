@@ -9,13 +9,13 @@
     {
       "name": "windows-debug",
       "displayName": "Windows x64 Debug (vcpkg classic)",
-      "description": "Ninja Debug build using the Qt installation managed by classic-mode vcpkg.",
-      "generator": "Ninja",
+      "description": "Visual Studio Debug build using the Qt installation managed by classic-mode vcpkg.",
+      "generator": "Visual Studio 18 2026",
+      "architecture": "x64",
       "binaryDir": "${sourceDir}/out/build/${presetName}",
       "installDir": "${sourceDir}/out/install/${presetName}",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_TOOLCHAIN_FILE": "D:/workspace/vcpkg/scripts/buildsystems/vcpkg.cmake",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "VCPKG_TARGET_TRIPLET": "x64-windows"
       }
@@ -23,23 +23,22 @@
     {
       "name": "windows-release",
       "displayName": "Windows x64 Release (vcpkg classic)",
-      "description": "Ninja Release build using the Qt installation managed by classic-mode vcpkg.",
+      "description": "Visual Studio Release build using the Qt installation managed by classic-mode vcpkg.",
       "inherits": "windows-debug",
-      "binaryDir": "${sourceDir}/out/build/${presetName}",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
-      }
+      "binaryDir": "${sourceDir}/out/build/${presetName}"
     }
   ],
   "buildPresets": [
     {
       "name": "windows-debug",
       "configurePreset": "windows-debug",
+      "configuration": "Debug",
       "jobs": 8
     },
     {
       "name": "windows-release",
       "configurePreset": "windows-release",
+      "configuration": "Release",
       "jobs": 8
     }
   ]
