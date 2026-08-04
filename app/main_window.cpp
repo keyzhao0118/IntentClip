@@ -61,7 +61,7 @@ MainWindow::MainWindow(QWidget* parent)
     setObjectName(QStringLiteral("mainDialog"));
     setWindowFlag(Qt::WindowContextHelpButtonHint, false);
     setWindowFlag(Qt::MSWindowsFixedSizeDialogHint, true);
-    resize(760, 500);
+    resize(700, 500);
     setMinimumSize(600, 460);
 
     auto* rootLayout = new QVBoxLayout(this);
@@ -278,7 +278,7 @@ MainWindow::MainWindow(QWidget* parent)
         QToolButton#intentButton {
             color: #5f6062; background-color: #f7f7f7;
             border: 1px solid #e4e4e4; border-radius: 10px;
-            padding: 11px 14px; font-size: 13px; font-weight: 550;
+            padding: 11px 10px; font-size: 13px; font-weight: 550;
             text-align: center;
         }
         QToolButton#intentButton:hover { color: #1a1c1f; border-color: #e4e4e4; background-color: #f0f1f2; }
