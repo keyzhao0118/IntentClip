@@ -286,6 +286,9 @@ MainWindow::MainWindow(QWidget* parent)
         QFrame#resultCard { background-color: #f7f7f7; border: 1px solid #e4e4e4; border-radius: 10px; }
         QLabel#resultBody { color: #1a1c1f; font-size: 14px; }
         QScrollArea#resultScrollArea { background: transparent; border: none; }
+        QFrame#resultContent { background: transparent; border: none; }
+        QFrame#optionsFrame { background: transparent; border: none; }
+        QScrollArea#resultScrollArea > QWidget#qt_scrollarea_viewport { background: transparent; }
         QScrollBar:vertical { background: transparent; width: 8px; margin: 2px 0; }
         QScrollBar::handle:vertical { background: #c9cbcb; border-radius: 4px; min-height: 28px; }
         QScrollBar::handle:vertical:hover { background: #b0b2b4; }
