@@ -50,38 +50,38 @@ PromptSettingsDialog::PromptSettingsDialog(const IntentDefinition& definition, Q
 
     setStyleSheet(QStringLiteral(R"(
         QDialog#promptSettingsDialog {
-            color: #202939;
-            background-color: #f6f7fb;
+            color: #1a1c1f;
+            background-color: #f9f9f9;
             font-family: "Segoe UI", "Microsoft YaHei UI";
             font-size: 13px;
         }
-        QLabel { color: #344054; font-weight: 600; }
+        QLabel { color: #1a1c1f; font-weight: 600; }
         QLabel#dialogExplanation {
-            color: #667085; background-color: #eef1f7;
-            border: 1px solid #e0e4eb; border-radius: 10px;
+            color: #5f6062; background-color: #f7f7f7;
+            border: 1px solid #e4e4e4; border-radius: 10px;
             padding: 12px 14px; font-weight: 400;
         }
         QLineEdit, QPlainTextEdit {
-            color: #202939; background-color: #ffffff;
-            border: 1px solid #dfe3ea; border-radius: 9px;
-            padding: 9px 11px; selection-background-color: #cfd9ff;
+            color: #1a1c1f; background-color: #ffffff;
+            border: 1px solid #e4e4e4; border-radius: 9px;
+            padding: 9px 11px; selection-background-color: #e8e9ea;
         }
         QLineEdit { min-height: 20px; }
-        QLineEdit:focus, QPlainTextEdit:focus { border: 1px solid #7892ea; }
+        QLineEdit:focus, QPlainTextEdit:focus { border: 1px solid #75777a; }
         QPushButton {
             min-width: 76px; padding: 8px 15px;
-            color: #344054; background-color: #ffffff;
-            border: 1px solid #d8dde6; border-radius: 8px;
+            color: #1a1c1f; background-color: #ffffff;
+            border: 1px solid #e4e4e4; border-radius: 8px;
             font-weight: 600;
         }
-        QPushButton:hover { background-color: #f4f6f9; border-color: #bdc5d1; }
+        QPushButton:hover { background-color: #f0f1f2; border-color: #c9cbcb; }
         QPushButton:default {
-            color: #ffffff; background-color: #526fd4;
-            border-color: #526fd4;
+            color: #ffffff; background-color: #1a1c1f;
+            border-color: #1a1c1f;
         }
-        QPushButton:default:hover { background-color: #465fc0; border-color: #465fc0; }
+        QPushButton:default:hover { background-color: #2e3134; border-color: #2e3134; }
         QScrollBar:vertical { background: transparent; width: 8px; }
-        QScrollBar::handle:vertical { background: #c9ced8; border-radius: 4px; min-height: 28px; }
+        QScrollBar::handle:vertical { background: #c9cbcb; border-radius: 4px; min-height: 28px; }
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
     )"));
 }

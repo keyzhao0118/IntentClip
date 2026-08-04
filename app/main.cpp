@@ -25,7 +25,7 @@ QIcon createTrayIcon()
     pixmap.fill(Qt::transparent);
     QPainter painter(&pixmap);
     painter.setRenderHint(QPainter::Antialiasing);
-    painter.setBrush(QColor(QStringLiteral("#2457a7")));
+    painter.setBrush(QColor(QStringLiteral("#1a1c1f")));
     painter.setPen(Qt::NoPen);
     painter.drawRoundedRect(4, 4, 56, 56, 14, 14);
     painter.setPen(QPen(Qt::white, 6, Qt::SolidLine, Qt::RoundCap));
@@ -59,9 +59,9 @@ int main(int argc, char* argv[])
     trayMenu.setObjectName(QStringLiteral("trayMenu"));
     trayMenu.setStyleSheet(QStringLiteral(R"(
         QMenu#trayMenu {
-            color: #273043;
+            color: #1a1c1f;
             background-color: #ffffff;
-            border: 1px solid #dfe3ea;
+            border: 1px solid #e4e4e4;
             border-radius: 9px;
             padding: 6px;
             font-family: "Segoe UI", "Microsoft YaHei UI";
@@ -73,8 +73,8 @@ int main(int argc, char* argv[])
             border-radius: 6px;
         }
         QMenu#trayMenu::item:selected {
-            color: #334aa5;
-            background-color: #edf1ff;
+            color: #1a1c1f;
+            background-color: #f0f1f2;
         }
     )"));
     QAction* openAction = trayMenu.addAction(QStringLiteral("打开面板"));
