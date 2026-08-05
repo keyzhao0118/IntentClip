@@ -52,7 +52,9 @@ MainWindow::MainWindow(QWidget* parent)
     setWindowFlag(Qt::WindowContextHelpButtonHint, false);
     setWindowFlag(Qt::MSWindowsFixedSizeDialogHint, true);
     resize(700, 500);
-    setMinimumSize(600, 460);
+    // 纯内容区（结果区隐藏）的自然高度约 320px，最小高度不应把它撑出底部留白；
+    // 结果区显示时 sizeHint 约 600px+，不受此下限影响。
+    setMinimumSize(600, 300);
 
     auto* rootLayout = new QVBoxLayout(this);
     rootLayout->setContentsMargins(24, 22, 24, 24);
