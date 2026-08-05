@@ -1,18 +1,17 @@
 #pragma once
 
+#include <QDialog>
 #include <QHash>
 #include <QList>
 #include <QPointer>
-#include <QDialog>
 
 #include "intent_prompt_config.h"
 
-class QButtonGroup;
 class QCloseEvent;
+class QComboBox;
 class QFrame;
 class InferenceClient;
 class QLabel;
-class QGridLayout;
 class QLayout;
 class QProgressBar;
 class QScrollArea;
@@ -26,25 +25,17 @@ public:
     explicit MainWindow(QWidget* parent = nullptr);
     void showClipboardText(const QString& text);
     void showPanel();
+    void openFunctionSettings();
 
 protected:
     void closeEvent(QCloseEvent* event) override;
 
 private:
-    void showConfiguredFunctions(bool executeSelection = true);
-    void showFunctionOptions(const QStringList& functionIds,
-        const QString& selectedFunctionId = {}, bool executeSelection = true);
-    void addFunction();
-    void restoreDefaultFunctions();
-    void editFunction(const QString& functionId);
-    void deleteFunction(const QString& functionId);
-    void setDefaultFunction(const QString& functionId);
-    bool saveFunctionConfig(const QString& successMessage);
-    void refreshFunctionButtonsPreservingState();
     void invalidateCacheForContentChange();
-    void selectIntent(const QString& intent);
+    void refreshFunctionSelection(bool executeSelection = true);
+    void switchFunction(const QString& functionId);
     void beginFunctionExecution(bool forceRegeneration = false);
-    void renderResult(const QString& intent, const QString& body);
+    void renderResult(const QString& body);
     void showResultStatus(const QString& message, bool loading);
     void clearLayout(QLayout* layout);
     void updateExpandedSize();
@@ -53,12 +44,8 @@ private:
     InferenceClient* inferenceClient_ = nullptr;
     QTextEdit* contentEdit_ = nullptr;
     QToolButton* contentEditButton_ = nullptr;
-    QFrame* intentSection_ = nullptr;
-    QFrame* intentOptions_ = nullptr;
-    QGridLayout* intentOptionsLayout_ = nullptr;
-    QButtonGroup* intentButtonGroup_ = nullptr;
     QFrame* resultSection_ = nullptr;
-    QLabel* resultTitleLabel_ = nullptr;
+    QComboBox* functionSelector_ = nullptr;
     QProgressBar* resultProgress_ = nullptr;
     QLabel* resultLoadingLabel_ = nullptr;
     QFrame* resultLoadingContainer_ = nullptr;
@@ -67,7 +54,6 @@ private:
     QVBoxLayout* resultContentLayout_ = nullptr;
     QPointer<QLabel> resultBodyLabel_;
     QString streamingIntent_;
-    QList<QToolButton*> intentButtons_;
     QHash<QString, QString> resultCache_;
     QString currentIntent_;
 };

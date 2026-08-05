@@ -78,6 +78,7 @@ int main(int argc, char* argv[])
         }
     )"));
     QAction* openAction = trayMenu.addAction(QStringLiteral("打开面板"));
+    QAction* settingsAction = trayMenu.addAction(QStringLiteral("功能设置"));
     QAction* quitAction = trayMenu.addAction(QStringLiteral("退出"));
     tray.setContextMenu(&trayMenu);
 
@@ -91,6 +92,9 @@ int main(int argc, char* argv[])
 
     QObject::connect(openAction, &QAction::triggered, &window, [&window] {
         window.showPanel();
+    });
+    QObject::connect(settingsAction, &QAction::triggered, &window, [&window] {
+        window.openFunctionSettings();
     });
     QObject::connect(quitAction, &QAction::triggered, &application, &QApplication::quit);
     QObject::connect(&tray, &QSystemTrayIcon::activated, &window,

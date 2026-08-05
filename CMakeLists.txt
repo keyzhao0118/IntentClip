@@ -59,6 +59,8 @@ qt_add_executable(IntentClip
     app/inference_client.h
     app/copy_gesture_monitor.cpp
     app/copy_gesture_monitor.h
+    app/function_settings_dialog.cpp
+    app/function_settings_dialog.h
     app/main.cpp
     app/main_window.cpp
     app/main_window.h

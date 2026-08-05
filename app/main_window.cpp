@@ -1,19 +1,15 @@
 #include "main_window.h"
 
+#include "function_settings_dialog.h"
 #include "inference_client.h"
-#include "prompt_settings_dialog.h"
-#include "rounded_menu.h"
 
-#include <QButtonGroup>
 #include <QCloseEvent>
+#include <QComboBox>
 #include <QFrame>
-#include <QGridLayout>
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLayoutItem>
-#include <QMenu>
-#include <QMessageBox>
 #include <QProgressBar>
 #include <QScrollArea>
 #include <QScreen>
@@ -22,7 +18,6 @@
 #include <QTextEdit>
 #include <QTimer>
 #include <QToolButton>
-#include <QUuid>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -46,11 +41,6 @@ QFrame* makeSection(QWidget* parent)
     auto* section = new QFrame(parent);
     section->setObjectName(QStringLiteral("section"));
     return section;
-}
-
-QString intentButtonText(const QString& name, bool isDefault)
-{
-    return isDefault ? QStringLiteral("%1  ·  默认").arg(name) : name;
 }
 }
 
@@ -101,45 +91,16 @@ MainWindow::MainWindow(QWidget* parent)
     contentLayout->addWidget(contentEdit_);
     layout->addWidget(contentSection);
 
-    intentSection_ = makeSection(contentWidget);
-    auto* intentLayout = new QVBoxLayout(intentSection_);
-    intentLayout->setContentsMargins(22, 20, 22, 22);
-    intentLayout->setSpacing(10);
-    auto* intentHeader = new QHBoxLayout;
-    intentHeader->addWidget(makeSectionTitle(tr("Intent"), intentSection_));
-    intentHeader->addStretch();
-    auto* restoreDefaultsButton = new QToolButton(intentSection_);
-    restoreDefaultsButton->setObjectName(QStringLiteral("sectionAction"));
-    restoreDefaultsButton->setText(tr("\u6062\u590d\u9ed8\u8ba4"));
-    restoreDefaultsButton->setToolTip(tr("\u6062\u590d\u5185\u7f6e\u7684 5 \u4e2a\u529f\u80fd\uff0c\u5e76\u5c06\u201c\u603b\u7ed3\u8981\u70b9\u201d\u8bbe\u4e3a\u9ed8\u8ba4"));
-    intentHeader->addWidget(restoreDefaultsButton);
-    auto* addFunctionButton = new QToolButton(intentSection_);
-    addFunctionButton->setObjectName(QStringLiteral("sectionAction"));
-    addFunctionButton->setText(tr("＋ 添加功能"));
-    addFunctionButton->setToolTip(tr("新增一个始终显示在 Intent 区的功能"));
-    intentHeader->addWidget(addFunctionButton);
-    intentLayout->addLayout(intentHeader);
-    auto* intentHint = new QLabel(tr("选择要执行的功能；面板打开时自动执行默认功能。"), intentSection_);
-    intentHint->setObjectName(QStringLiteral("sectionHint"));
-    intentLayout->addWidget(intentHint);
-    intentOptions_ = new QFrame(intentSection_);
-    intentOptions_->setObjectName(QStringLiteral("optionsFrame"));
-    intentOptionsLayout_ = new QGridLayout(intentOptions_);
-    intentOptionsLayout_->setContentsMargins(0, 0, 0, 0);
-    intentOptionsLayout_->setHorizontalSpacing(8);
-    intentOptionsLayout_->setVerticalSpacing(8);
-    for (int column = 0; column < 5; ++column) intentOptionsLayout_->setColumnStretch(column, 1);
-    intentLayout->addWidget(intentOptions_);
-    intentSection_->hide();
-    layout->addWidget(intentSection_);
-
     resultSection_ = makeSection(contentWidget);
     auto* resultLayout = new QVBoxLayout(resultSection_);
     resultLayout->setContentsMargins(22, 20, 22, 22);
     resultLayout->setSpacing(10);
     auto* resultHeader = new QHBoxLayout;
-    resultTitleLabel_ = makeSectionTitle(tr("\u7ed3\u679c"), resultSection_);
-    resultHeader->addWidget(resultTitleLabel_);
+    functionSelector_ = new QComboBox(resultSection_);
+    functionSelector_->setObjectName(QStringLiteral("functionSelector"));
+    functionSelector_->setToolTip(tr("选择要执行的 AI 功能；切换后立即按当前 Content 重新生成"));
+    functionSelector_->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    resultHeader->addWidget(functionSelector_);
     resultHeader->addStretch();
     auto* regenerateResultButton = new QToolButton(resultSection_);
     regenerateResultButton->setObjectName(QStringLiteral("sectionAction"));
@@ -179,13 +140,10 @@ MainWindow::MainWindow(QWidget* parent)
     resultContentLayout_->setSpacing(10);
     resultScrollArea_->setWidget(resultContent_);
     resultLayout->addWidget(resultScrollArea_);
-    resultSection_->hide();
     layout->addWidget(resultSection_);
     layout->addStretch();
 
     promptConfig_ = IntentPromptConfig::load();
-    connect(addFunctionButton, &QToolButton::clicked, this, &MainWindow::addFunction);
-    connect(restoreDefaultsButton, &QToolButton::clicked, this, &MainWindow::restoreDefaultFunctions);
     connect(contentEditButton_, &QToolButton::clicked, this, [this] {
         const bool beginEditing = contentEdit_->isReadOnly();
         contentEdit_->setReadOnly(!beginEditing);
@@ -199,14 +157,15 @@ MainWindow::MainWindow(QWidget* parent)
         }
 
         if (contentEdit_->toPlainText().trimmed().isEmpty()) return;
-        if (intentSection_->isHidden()) showConfiguredFunctions(false);
         beginFunctionExecution(false);
     });
-    intentButtonGroup_ = new QButtonGroup(this);
-    intentButtonGroup_->setExclusive(true);
     connect(regenerateResultButton, &QToolButton::clicked, this, [this] {
         if (!currentIntent_.isEmpty()) beginFunctionExecution(true);
     });
+    connect(functionSelector_, &QComboBox::currentIndexChanged, this,
+        [this](int index) {
+            switchFunction(functionSelector_->itemData(index).toString());
+        });
 
     inferenceClient_ = new InferenceClient(this);
     connect(contentEdit_, &QTextEdit::textChanged,
@@ -214,10 +173,9 @@ MainWindow::MainWindow(QWidget* parent)
     connect(inferenceClient_, &InferenceClient::resultUpdated, this,
         [this](const QString& intentId, const QString& partialResult) {
             if (intentId != currentIntent_ || partialResult.isEmpty()) return;
-            const IntentDefinition* definition = promptConfig_.findById(intentId);
             if (streamingIntent_ != intentId || !resultBodyLabel_) {
                 streamingIntent_ = intentId;
-                renderResult(definition ? definition->name : intentId, partialResult);
+                renderResult(partialResult);
             } else {
                 resultBodyLabel_->setText(partialResult);
                 resultContent_->adjustSize();
@@ -230,9 +188,8 @@ MainWindow::MainWindow(QWidget* parent)
         [this](const QString& intentId, const QString& result) {
             resultCache_.insert(intentId, result);
             if (intentId != currentIntent_) return;
-            const IntentDefinition* definition = promptConfig_.findById(intentId);
             streamingIntent_.clear();
-            renderResult(definition ? definition->name : intentId, result);
+            renderResult(result);
         });
     connect(inferenceClient_, &InferenceClient::executionError, this,
         [this](const QString& intentId, const QString& message) {
@@ -245,7 +202,7 @@ MainWindow::MainWindow(QWidget* parent)
         updateExpandedSize();
     });
 
-
+    refreshFunctionSelection(false);
 
     setStyleSheet(QStringLiteral(R"(
         * { font-family: "Segoe UI", "Microsoft YaHei UI"; }
@@ -275,19 +232,29 @@ MainWindow::MainWindow(QWidget* parent)
         }
         QToolButton#sectionAction:hover { color: #1a1c1f; background-color: #e6e7e8; border-color: #e4e4e4; }
         QToolButton#sectionAction:pressed { background-color: #dcddde; }
-        QToolButton#intentButton {
-            color: #5f6062; background-color: #f7f7f7;
-            border: 1px solid #e4e4e4; border-radius: 10px;
-            padding: 11px 10px; font-size: 13px; font-weight: 550;
-            text-align: center;
+        QComboBox#functionSelector {
+            color: #1a1c1f; background-color: #f0f1f2;
+            border: 1px solid #e4e4e4; border-radius: 8px;
+            padding: 6px 12px; font-size: 14px; font-weight: 700;
+            min-width: 180px;
         }
-        QToolButton#intentButton:hover { color: #1a1c1f; border-color: #e4e4e4; background-color: #f0f1f2; }
-        QToolButton#intentButton:checked { color: #ffffff; border-color: #1a1c1f; background-color: #1a1c1f; font-weight: 700; }
+        QComboBox#functionSelector:hover { background-color: #e6e7e8; border-color: #e4e4e4; }
+        QComboBox#functionSelector::drop-down { border: none; width: 26px; }
+        QComboBox#functionSelector::down-arrow {
+            image: none; border-left: 5px solid transparent;
+            border-right: 5px solid transparent; border-top: 6px solid #1a1c1f;
+            margin-right: 8px;
+        }
+        QComboBox#functionSelector QAbstractItemView {
+            color: #1a1c1f; background: #ffffff;
+            border: 1px solid #e4e4e4; border-radius: 8px;
+            selection-background-color: #f0f1f2; padding: 4px;
+            outline: none;
+        }
         QFrame#resultCard { background-color: #f7f7f7; border: 1px solid #e4e4e4; border-radius: 10px; }
         QLabel#resultBody { color: #1a1c1f; font-size: 14px; }
         QScrollArea#resultScrollArea { background: transparent; border: none; }
         QFrame#resultContent { background: transparent; border: none; }
-        QFrame#optionsFrame { background: transparent; border: none; }
         QScrollArea#resultScrollArea > QWidget#qt_scrollarea_viewport { background: transparent; }
         QScrollBar:vertical { background: transparent; width: 8px; margin: 2px 0; }
         QScrollBar::handle:vertical { background: #c9cbcb; border-radius: 4px; min-height: 28px; }
@@ -307,13 +274,18 @@ void MainWindow::showClipboardText(const QString& text)
     contentEditButton_->setText(tr("编辑"));
     const QSignalBlocker blocker(contentEdit_);
     contentEdit_->setPlainText(text);
-    showConfiguredFunctions();
+    currentIntent_.clear();
+    refreshFunctionSelection(true);
     showPanel();
 }
 
 void MainWindow::showPanel()
 {
-    if (intentSection_->isHidden()) showConfiguredFunctions(false);
+    if (functionSelector_->count() == 0) refreshFunctionSelection(false);
+    if (contentEdit_->toPlainText().trimmed().isEmpty()) {
+        resultSection_->hide();
+        updateExpandedSize();
+    }
     showNormal();
     updateExpandedSize();
 #ifdef Q_OS_WIN
@@ -340,272 +312,83 @@ void MainWindow::showPanel()
 #endif
 }
 
+void MainWindow::openFunctionSettings()
+{
+    FunctionSettingsDialog dialog(this);
+    dialog.exec();
+    refreshFunctionSelection(false);
+}
+
 void MainWindow::invalidateCacheForContentChange()
 {
     const bool hadResultState = !resultCache_.isEmpty() || resultSection_->isVisible();
     resultCache_.clear();
     if (inferenceClient_) inferenceClient_->invalidateExecution();
-    if (!intentSection_->isVisible() || !hadResultState) return;
+    if (!hadResultState) return;
 
     clearLayout(resultContentLayout_);
     showResultStatus(tr("Content 已变化，请重新生成当前功能的结果。"), false);
     updateExpandedSize();
 }
 
-void MainWindow::refreshFunctionButtonsPreservingState()
+void MainWindow::refreshFunctionSelection(bool executeSelection)
 {
+    QString configError;
+    promptConfig_ = IntentPromptConfig::load(&configError);
     const QString previousSelection = currentIntent_;
-    QString selectedFunctionId = previousSelection;
-    if (!promptConfig_.findById(selectedFunctionId)) {
-        selectedFunctionId = promptConfig_.findById(promptConfig_.defaultFunctionId)
-            ? promptConfig_.defaultFunctionId
-            : (promptConfig_.intents.isEmpty() ? QString() : promptConfig_.intents.first().id);
-        currentIntent_ = selectedFunctionId;
+    if (!configError.isEmpty()) {
+        functionSelector_->clear();
+        currentIntent_.clear();
+        showResultStatus(tr("配置错误：%1").arg(configError), false);
+        updateExpandedSize();
+        return;
     }
 
-    clearLayout(intentOptionsLayout_);
-    intentButtons_.clear();
-    QStringList functionIds;
-    for (const IntentDefinition& definition : promptConfig_.intents)
-        functionIds.append(definition.id);
-    const bool executeFirstFunction = previousSelection.isEmpty()
-        && !selectedFunctionId.isEmpty();
-    showFunctionOptions(functionIds, selectedFunctionId, executeFirstFunction);
+    QString selected = previousSelection;
+    if (!promptConfig_.findById(selected)) {
+        selected = promptConfig_.findById(promptConfig_.defaultFunctionId)
+            ? promptConfig_.defaultFunctionId
+            : (promptConfig_.intents.isEmpty() ? QString() : promptConfig_.intents.first().id);
+    }
 
-    if (selectedFunctionId != previousSelection) {
-        if (resultCache_.contains(selectedFunctionId)) {
-            const IntentDefinition* definition = promptConfig_.findById(selectedFunctionId);
-            renderResult(definition ? definition->name : selectedFunctionId,
-                resultCache_.value(selectedFunctionId));
+    const QSignalBlocker blocker(functionSelector_);
+    functionSelector_->clear();
+    for (const IntentDefinition& definition : promptConfig_.intents)
+        functionSelector_->addItem(definition.name, definition.id);
+    const int index = functionSelector_->findData(selected);
+    functionSelector_->setCurrentIndex(index >= 0 ? index : 0);
+    currentIntent_ = functionSelector_->currentIndex() >= 0
+        ? functionSelector_->currentData().toString() : QString();
+
+    if (currentIntent_.isEmpty()) {
+        clearLayout(resultContentLayout_);
+        showResultStatus(tr("尚未配置功能，请在托盘“功能设置”中添加功能。"), false);
+        updateExpandedSize();
+        return;
+    }
+
+    if (executeSelection) {
+        beginFunctionExecution(false);
+        return;
+    }
+    if (previousSelection != currentIntent_ && resultSection_->isVisible()) {
+        if (resultCache_.contains(currentIntent_)) {
+            renderResult(resultCache_.value(currentIntent_));
         } else {
             clearLayout(resultContentLayout_);
-            resultScrollArea_->hide();
-            resultProgress_->hide();
-            resultLoadingLabel_->hide();
-            resultSection_->hide();
+            showResultStatus(tr("功能已切换，请重新生成。"), false);
+            updateExpandedSize();
         }
     }
 }
-bool MainWindow::saveFunctionConfig(const QString& successMessage)
+
+void MainWindow::switchFunction(const QString& functionId)
 {
-    QString error;
-    if (!promptConfig_.save(&error)) {
-        QMessageBox::warning(this, tr("配置无效"), error);
-        return false;
-    }
-    refreshFunctionButtonsPreservingState();
-    return true;
-}
-
-void MainWindow::restoreDefaultFunctions()
-{
-    const auto answer = QMessageBox::question(
-        this,
-        tr("\u6062\u590d\u9ed8\u8ba4\u529f\u80fd"),
-        tr("\u8fd9\u4f1a\u5220\u9664\u5f53\u524d\u81ea\u5b9a\u4e49\u529f\u80fd\u5e76\u6062\u590d\u5185\u7f6e\u7684 5 \u4e2a\u529f\u80fd\uff0c\u662f\u5426\u7ee7\u7eed\uff1f"),
-        QMessageBox::Yes | QMessageBox::No,
-        QMessageBox::No);
-    if (answer != QMessageBox::Yes) return;
-
-    IntentPromptConfig defaults = IntentPromptConfig::defaults();
-    QString error;
-    if (!defaults.save(&error)) {
-        QMessageBox::warning(
-            this,
-            tr("\u6062\u590d\u5931\u8d25"),
-            tr("\u65e0\u6cd5\u4fdd\u5b58\u9ed8\u8ba4\u529f\u80fd\u914d\u7f6e\uff1a%1").arg(error));
-        return;
-    }
-
-    if (inferenceClient_) inferenceClient_->invalidateExecution();
-    resultCache_.clear();
-    streamingIntent_.clear();
-    showConfiguredFunctions(true);
-}
-
-void MainWindow::addFunction()
-{
-    IntentDefinition definition{
-        QStringLiteral("function_") + QUuid::createUuid().toString(QUuid::Id128).left(16),
-        tr("新功能"),
-        tr("请填写一句话功能描述。"),
-        tr("请说明点击功能后，本地模型应如何处理 Content 内容。")
-    };
-    PromptSettingsDialog dialog(definition, this);
-    if (dialog.exec() != QDialog::Accepted) return;
-    const IntentPromptConfig previousConfig = promptConfig_;
-    promptConfig_.intents.append(dialog.definition());
-    if (promptConfig_.defaultFunctionId.isEmpty())
-        promptConfig_.defaultFunctionId = promptConfig_.intents.constLast().id;
-    QString error;
-    if (!promptConfig_.save(&error)) {
-        promptConfig_ = previousConfig;
-        QMessageBox::warning(this, tr("配置无效"), error);
-        return;
-    }
-
-    refreshFunctionButtonsPreservingState();
-}
-
-void MainWindow::editFunction(const QString& functionId)
-{
-    for (IntentDefinition& definition : promptConfig_.intents) {
-        if (definition.id != functionId) continue;
-        PromptSettingsDialog dialog(definition, this);
-        if (dialog.exec() != QDialog::Accepted) return;
-        definition = dialog.definition();
-        saveFunctionConfig(tr("功能已更新"));
-        return;
-    }
-}
-
-void MainWindow::deleteFunction(const QString& functionId)
-{
-    const IntentDefinition* target = promptConfig_.findById(functionId);
-    if (!target) return;
-    if (QMessageBox::question(this, tr("删除功能"),
-            tr("确定删除“%1”吗？此操作会删除对应的本地配置文件。").arg(target->name),
-            QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes) return;
-
-    const bool deletedDefault = promptConfig_.defaultFunctionId == functionId;
-    for (auto iterator = promptConfig_.intents.begin(); iterator != promptConfig_.intents.end(); ++iterator) {
-        if (iterator->id != functionId) continue;
-        promptConfig_.intents.erase(iterator);
-        break;
-    }
-    if (deletedDefault)
-        promptConfig_.defaultFunctionId = promptConfig_.intents.isEmpty()
-            ? QString() : promptConfig_.intents.first().id;
-    saveFunctionConfig(tr("功能已删除"));
-}
-
-void MainWindow::setDefaultFunction(const QString& functionId)
-{
-    if (!promptConfig_.findById(functionId)
-        || promptConfig_.defaultFunctionId == functionId) return;
-
-    const QString previousDefaultId = promptConfig_.defaultFunctionId;
-    promptConfig_.defaultFunctionId = functionId;
-    QString error;
-    if (!promptConfig_.save(&error)) {
-        promptConfig_.defaultFunctionId = previousDefaultId;
-        QMessageBox::warning(this, tr("配置无效"), error);
-        return;
-    }
-
-    for (QToolButton* button : intentButtons_) {
-        const bool isDefault = button->property("intentId").toString() == functionId;
-        button->setProperty("isDefault", isDefault);
-        button->setText(intentButtonText(
-            button->property("intentName").toString(), isDefault));
-    }
-}
-void MainWindow::showConfiguredFunctions(bool executeSelection)
-{
-    clearLayout(intentOptionsLayout_);
-    intentButtons_.clear();
-    currentIntent_.clear();
-    clearLayout(resultContentLayout_);
-    intentOptions_->hide();
-    intentSection_->show();
-    resultSection_->hide();
-
-    QString configError;
-    promptConfig_ = IntentPromptConfig::load(&configError);
-    if (!configError.isEmpty()) {
-        auto* errorLabel = new QLabel(tr("配置错误：%1").arg(configError), intentOptions_);
-        errorLabel->setWordWrap(true);
-        intentOptionsLayout_->addWidget(errorLabel, 0, 0, 1, 5);
-        intentOptions_->show();
-        updateExpandedSize();
-        return;
-    }
-
-    QStringList functionIds;
-    for (const IntentDefinition& definition : promptConfig_.intents)
-        functionIds.append(definition.id);
-    showFunctionOptions(functionIds, {},
-        executeSelection && !contentEdit_->toPlainText().trimmed().isEmpty());
-}
-
-void MainWindow::showFunctionOptions(const QStringList& functionIds,
-    const QString& selectedFunctionId, bool executeSelection)
-{
-    QToolButton* defaultButton = nullptr;
-    QToolButton* selectedButton = nullptr;
-    for (const QString& functionId : functionIds) {
-        const IntentDefinition* definition = promptConfig_.findById(functionId);
-        if (!definition) continue;
-
-        auto* button = new QToolButton(intentOptions_);
-        button->setObjectName(QStringLiteral("intentButton"));
-        button->setCheckable(true);
-        button->setContextMenuPolicy(Qt::CustomContextMenu);
-        button->setProperty("intentId", definition->id);
-        button->setProperty("intentName", definition->name);
-        button->setProperty("isDefault", (definition->id == promptConfig_.defaultFunctionId));
-        button->setToolTip(definition->description + tr("\n右键可编辑、设为默认或删除"));
-        button->setToolButtonStyle(Qt::ToolButtonTextOnly);
-        button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-        button->setText(intentButtonText(definition->name,
-            definition->id == promptConfig_.defaultFunctionId));
-        intentButtonGroup_->addButton(button);
-        connect(button, &QToolButton::toggled, this, [this, button](bool checked) {
-            button->setText(intentButtonText(
-                button->property("intentName").toString(),
-                button->property("isDefault").toBool()));
-            if (checked) selectIntent(button->property("intentId").toString());
-        });
-        connect(button, &QToolButton::customContextMenuRequested, this,
-            [this, button](const QPoint& position) {
-                const QString functionId = button->property("intentId").toString();
-                const IntentDefinition* current = promptConfig_.findById(functionId);
-                if (!current) return;
-                RoundedMenu menu(this);
-                QAction* editAction = menu.addAction(tr("编辑功能"));
-                QAction* defaultAction = menu.addAction(
-                    (current->id == promptConfig_.defaultFunctionId) ? tr("当前默认功能") : tr("设为默认功能"));
-                defaultAction->setEnabled(!(current->id == promptConfig_.defaultFunctionId));
-                menu.addSeparator();
-                QAction* deleteAction = menu.addAction(tr("删除功能"));
-                QAction* selected = menu.exec(button->mapToGlobal(position));
-                if (selected == editAction) editFunction(functionId);
-                else if (selected == defaultAction) setDefaultFunction(functionId);
-                else if (selected == deleteAction) deleteFunction(functionId);
-            });
-        const int position = static_cast<int>(intentButtons_.size());
-        intentButtons_.append(button);
-        intentOptionsLayout_->addWidget(button, position / 5, position % 5);
-        if (definition->id == promptConfig_.defaultFunctionId) defaultButton = button;
-        if (definition->id == selectedFunctionId) selectedButton = button;
-    }
-    intentOptions_->show();
-    if (intentButtons_.isEmpty()) {
-        auto* emptyLabel = new QLabel(tr("尚未配置功能，请点击“添加功能”。"), intentOptions_);
-        intentOptionsLayout_->addWidget(emptyLabel, 0, 0, 1, 5);
-        updateExpandedSize();
-        return;
-    }
-
-    QToolButton* targetButton = selectedButton
-        ? selectedButton : (defaultButton ? defaultButton : intentButtons_.first());
-    if (executeSelection) {
-        targetButton->setChecked(true);
-    } else {
-        currentIntent_ = targetButton->property("intentId").toString();
-        const QSignalBlocker blocker(targetButton);
-        targetButton->setChecked(true);
-        targetButton->setText(intentButtonText(
-            targetButton->property("intentName").toString(),
-            targetButton->property("isDefault").toBool()));
-    }
-    updateExpandedSize();
-}
-void MainWindow::selectIntent(const QString& intentId)
-{
-    currentIntent_ = intentId;
+    if (functionId.isEmpty() || functionId == currentIntent_) return;
+    currentIntent_ = functionId;
     beginFunctionExecution(false);
 }
+
 void MainWindow::beginFunctionExecution(bool forceRegeneration)
 {
     if (currentIntent_.isEmpty()) return;
@@ -618,13 +401,11 @@ void MainWindow::beginFunctionExecution(bool forceRegeneration)
         return;
     }
     if (!forceRegeneration && resultCache_.contains(currentIntent_)) {
-        const IntentDefinition* definition = promptConfig_.findById(currentIntent_);
-        renderResult(definition ? definition->name : currentIntent_, resultCache_.value(currentIntent_));
+        renderResult(resultCache_.value(currentIntent_));
         return;
     }
 
     const IntentDefinition* definition = promptConfig_.findById(currentIntent_);
-    resultTitleLabel_->setText(definition ? definition->name : currentIntent_);
     if (!definition || definition->actionPrompt.trimmed().isEmpty()) {
         showResultStatus(tr("功能执行提示词为空。"), false);
         updateExpandedSize();
@@ -639,9 +420,9 @@ void MainWindow::beginFunctionExecution(bool forceRegeneration)
         contentEdit_->toPlainText(), currentIntent_, definition->actionPrompt);
     updateExpandedSize();
 }
-void MainWindow::renderResult(const QString& intent, const QString& body)
+
+void MainWindow::renderResult(const QString& body)
 {
-    resultTitleLabel_->setText(intent);
     clearLayout(resultContentLayout_);
     auto* card = new QFrame(resultContent_);
     card->setObjectName(QStringLiteral("resultCard"));
