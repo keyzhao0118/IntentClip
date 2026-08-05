@@ -30,6 +30,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 find_package(Qt6 6.5 REQUIRED COMPONENTS Widgets Network)
 find_package(llama CONFIG REQUIRED)
 qt_standard_project_setup(REQUIRES 6.5)
+set(CMAKE_AUTORCC ON)
 
 # ============================================================
 # 捆绑模型（GGUF）
@@ -59,6 +60,7 @@ qt_add_executable(IntentClip
     app/inference_client.h
     app/copy_gesture_monitor.cpp
     app/copy_gesture_monitor.h
+    app/circular_spinner.h
     app/function_settings_dialog.cpp
     app/function_settings_dialog.h
     app/main.cpp
@@ -67,6 +69,7 @@ qt_add_executable(IntentClip
     app/prompt_settings_dialog.cpp
     app/prompt_settings_dialog.h
     app/rounded_menu.h
+    app/resources.qrc
 )
 
 target_link_libraries(IntentClip

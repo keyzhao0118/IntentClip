@@ -8,14 +8,14 @@
 #include "intent_prompt_config.h"
 
 class QCloseEvent;
+class QEvent;
 class QComboBox;
 class QFrame;
 class InferenceClient;
 class QLabel;
 class QLayout;
-class QProgressBar;
+class CircularSpinner;
 class QScrollArea;
-class QToolButton;
 class QTextEdit;
 class QVBoxLayout;
 
@@ -29,6 +29,7 @@ public:
 
 protected:
     void closeEvent(QCloseEvent* event) override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
     void invalidateCacheForContentChange();
@@ -39,14 +40,16 @@ private:
     void showResultStatus(const QString& message, bool loading);
     void clearLayout(QLayout* layout);
     void updateExpandedSize();
+    void enterContentEditMode();
+    void finishContentEdit();
+    bool isInsideContentEdit(QWidget* widget) const;
 
     IntentPromptConfig promptConfig_;
     InferenceClient* inferenceClient_ = nullptr;
     QTextEdit* contentEdit_ = nullptr;
-    QToolButton* contentEditButton_ = nullptr;
     QFrame* resultSection_ = nullptr;
     QComboBox* functionSelector_ = nullptr;
-    QProgressBar* resultProgress_ = nullptr;
+    CircularSpinner* resultSpinner_ = nullptr;
     QLabel* resultLoadingLabel_ = nullptr;
     QFrame* resultLoadingContainer_ = nullptr;
     QScrollArea* resultScrollArea_ = nullptr;

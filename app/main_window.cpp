@@ -1,4 +1,5 @@
 #include "main_window.h"
+#include "circular_spinner.h"
 
 #include "function_settings_dialog.h"
 #include "inference_client.h"
@@ -6,11 +7,11 @@
 #include <QCloseEvent>
 #include <QComboBox>
 #include <QFrame>
+#include <QApplication>
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLayoutItem>
-#include <QProgressBar>
 #include <QScrollArea>
 #include <QScreen>
 #include <QSignalBlocker>
@@ -26,7 +27,7 @@
 #include <windows.h>
 #endif
 
-constexpr int kContentViewportHeight = 160;
+constexpr int kContentViewportHeight = 191;
 constexpr int kResultViewportHeight = 180;
 namespace {
 QLabel* makeSectionTitle(const QString& title, QWidget* parent)
@@ -42,6 +43,7 @@ QFrame* makeSection(QWidget* parent)
     section->setObjectName(QStringLiteral("section"));
     return section;
 }
+
 }
 
 MainWindow::MainWindow(QWidget* parent)
@@ -74,15 +76,7 @@ MainWindow::MainWindow(QWidget* parent)
     auto* contentHeader = new QHBoxLayout;
     contentHeader->addWidget(makeSectionTitle(tr("Content"), contentSection));
     contentHeader->addStretch();
-    contentEditButton_ = new QToolButton(contentSection);
-    contentEditButton_->setObjectName(QStringLiteral("sectionAction"));
-    contentEditButton_->setText(tr("编辑"));
-    contentEditButton_->setToolTip(tr("手动编辑剪贴板内容"));
-    contentHeader->addWidget(contentEditButton_);
     contentLayout->addLayout(contentHeader);
-    auto* contentHint = new QLabel(tr("来自剪贴板的原始内容"), contentSection);
-    contentHint->setObjectName(QStringLiteral("sectionHint"));
-    contentLayout->addWidget(contentHint);
     contentEdit_ = new QTextEdit(contentSection);
     contentEdit_->setObjectName(QStringLiteral("contentEdit"));
     contentEdit_->setReadOnly(true);
@@ -121,11 +115,8 @@ MainWindow::MainWindow(QWidget* parent)
     resultLoadingLabel_->setAlignment(Qt::AlignCenter);
     resultLoadingLabel_->setWordWrap(true);
     resultLoadingLayout->addWidget(resultLoadingLabel_);
-    resultProgress_ = new QProgressBar(resultLoadingContainer_);
-    resultProgress_->setRange(0, 0);
-    resultProgress_->setTextVisible(false);
-    resultProgress_->setFixedHeight(4);
-    resultLoadingLayout->addWidget(resultProgress_);
+    resultSpinner_ = new CircularSpinner(resultLoadingContainer_);
+    resultLoadingLayout->addWidget(resultSpinner_, 0, Qt::AlignHCenter);
     resultLoadingLayout->addStretch();
     resultLayout->addWidget(resultLoadingContainer_);
     resultScrollArea_ = new QScrollArea(resultSection_);
@@ -146,21 +137,9 @@ MainWindow::MainWindow(QWidget* parent)
     layout->addStretch();
 
     promptConfig_ = IntentPromptConfig::load();
-    connect(contentEditButton_, &QToolButton::clicked, this, [this] {
-        const bool beginEditing = contentEdit_->isReadOnly();
-        contentEdit_->setReadOnly(!beginEditing);
-        contentEditButton_->setText(beginEditing ? tr("完成") : tr("编辑"));
-        if (beginEditing) {
-            contentEdit_->setFocus();
-            QTextCursor cursor = contentEdit_->textCursor();
-            cursor.movePosition(QTextCursor::End);
-            contentEdit_->setTextCursor(cursor);
-            return;
-        }
-
-        if (contentEdit_->toPlainText().trimmed().isEmpty()) return;
-        beginFunctionExecution(false);
-    });
+    QApplication::instance()->installEventFilter(this);
+    contentEdit_->installEventFilter(this);
+    contentEdit_->viewport()->installEventFilter(this);
     connect(regenerateResultButton, &QToolButton::clicked, this, [this] {
         if (!currentIntent_.isEmpty()) beginFunctionExecution(true);
     });
@@ -210,7 +189,6 @@ MainWindow::MainWindow(QWidget* parent)
         * { font-family: "Segoe UI", "Microsoft YaHei UI"; }
         QDialog#mainDialog { background-color: #f9f9f9; }
         #contentWidget { background: transparent; border: none; }
-        #sectionHint { color: #6d6f72; font-size: 12px; }
         QFrame#section {
             background-color: #ffffff;
             border: 1px solid #e4e4e4;
@@ -218,15 +196,13 @@ MainWindow::MainWindow(QWidget* parent)
         }
         #sectionTitle { color: #1a1c1f; font-size: 16px; font-weight: 700; }
         #contentEdit {
-            color: #1a1c1f; background-color: #f7f7f7;
+            color: #1a1c1f; background-color: transparent;
             border: 1px solid #e4e4e4; border-radius: 10px;
-            padding: 13px 14px; font-size: 14px;
+            padding: 12px 14px; font-size: 14px;
             selection-color: #1a1c1f; selection-background-color: #e8e9ea;
         }
-        #contentEdit:focus { background-color: #ffffff; border: 1px solid #75777a; }
+        #contentEdit:focus { background-color: transparent; border: 1px solid #75777a; }
         #loadingLabel { color: #5f6062; font-size: 13px; }
-        QProgressBar { background-color: #e4e4e4; border: none; border-radius: 2px; }
-        QProgressBar::chunk { background-color: #1a1c1f; border-radius: 2px; }
         QToolButton#sectionAction {
             color: #1a1c1f; background-color: #f0f1f2;
             border: 1px solid #e4e4e4; border-radius: 8px;
@@ -237,15 +213,16 @@ MainWindow::MainWindow(QWidget* parent)
         QComboBox#functionSelector {
             color: #1a1c1f; background-color: #f0f1f2;
             border: 1px solid #e4e4e4; border-radius: 8px;
-            padding: 6px 12px; font-size: 14px; font-weight: 700;
+            padding: 5px 12px; font-size: 14px; font-weight: 700;
             min-width: 180px;
         }
         QComboBox#functionSelector:hover { background-color: #e6e7e8; border-color: #e4e4e4; }
         QComboBox#functionSelector::drop-down { border: none; width: 26px; }
         QComboBox#functionSelector::down-arrow {
-            image: none; border-left: 5px solid transparent;
-            border-right: 5px solid transparent; border-top: 6px solid #1a1c1f;
-            margin-right: 8px;
+            image: url(:/resources/down-arrow.png);
+            width: 12px;
+            height: 7px;
+            margin-right: 7px;
         }
         QComboBox#functionSelector QAbstractItemView {
             color: #1a1c1f; background: #ffffff;
@@ -273,7 +250,6 @@ void MainWindow::showClipboardText(const QString& text)
 {
     invalidateCacheForContentChange();
     contentEdit_->setReadOnly(true);
-    contentEditButton_->setText(tr("编辑"));
     const QSignalBlocker blocker(contentEdit_);
     contentEdit_->setPlainText(text);
     currentIntent_.clear();
@@ -396,7 +372,6 @@ void MainWindow::beginFunctionExecution(bool forceRegeneration)
     if (currentIntent_.isEmpty()) return;
     if (contentEdit_->toPlainText().trimmed().isEmpty()) {
         contentEdit_->setReadOnly(false);
-        contentEditButton_->setText(tr("完成"));
         contentEdit_->setFocus();
         resultSection_->hide();
         updateExpandedSize();
@@ -439,6 +414,7 @@ void MainWindow::renderResult(const QString& body)
     resultBodyLabel_ = resultLabel;
     resultContentLayout_->addWidget(card);
 
+    resultSpinner_->stopSpinning();
     resultLoadingContainer_->hide();
     resultContent_->adjustSize();
     resultScrollArea_->show();
@@ -446,11 +422,57 @@ void MainWindow::renderResult(const QString& body)
     updateExpandedSize();
 }
 
+bool MainWindow::isInsideContentEdit(QWidget* widget) const
+{
+    for (QWidget* current = widget; current; current = current->parentWidget()) {
+        if (current == contentEdit_) return true;
+    }
+    return false;
+}
+
+void MainWindow::finishContentEdit()
+{
+    if (contentEdit_->isReadOnly()) return;
+    contentEdit_->setReadOnly(true);
+    if (contentEdit_->toPlainText().trimmed().isEmpty()) return;
+    beginFunctionExecution(false);
+}
+
+void MainWindow::enterContentEditMode()
+{
+    if (!contentEdit_->isReadOnly()) return;
+    contentEdit_->setReadOnly(false);
+    contentEdit_->setFocus();
+    QTextCursor cursor = contentEdit_->textCursor();
+    cursor.movePosition(QTextCursor::End);
+    contentEdit_->setTextCursor(cursor);
+}
+
+bool MainWindow::eventFilter(QObject* watched, QEvent* event)
+{
+    if (event->type() == QEvent::MouseButtonDblClick
+        && (watched == contentEdit_ || watched == contentEdit_->viewport())) {
+        enterContentEditMode();
+    } else if (event->type() == QEvent::MouseButtonPress
+        && !contentEdit_->isReadOnly()) {
+        if (auto* clicked = qobject_cast<QWidget*>(watched))
+            if (!isInsideContentEdit(clicked)) finishContentEdit();
+    } else if (event->type() == QEvent::FocusOut && watched == contentEdit_
+        && !contentEdit_->isReadOnly()) {
+        QTimer::singleShot(0, this, [this] {
+            if (contentEdit_->isReadOnly()) return;
+            finishContentEdit();
+        });
+    }
+    return QDialog::eventFilter(watched, event);
+}
+
 void MainWindow::showResultStatus(const QString& message, bool loading)
 {
     resultLoadingLabel_->setText(message);
     resultLoadingLabel_->show();
-    resultProgress_->setVisible(loading);
+    if (loading) resultSpinner_->startSpinning();
+    else resultSpinner_->stopSpinning();
     resultScrollArea_->hide();
     resultLoadingContainer_->show();
     resultSection_->show();

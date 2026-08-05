@@ -99,7 +99,8 @@ int main(int argc, char* argv[])
     QObject::connect(quitAction, &QAction::triggered, &application, &QApplication::quit);
     QObject::connect(&tray, &QSystemTrayIcon::activated, &window,
         [&window](QSystemTrayIcon::ActivationReason reason) {
-            if (reason == QSystemTrayIcon::DoubleClick) {
+            if (reason == QSystemTrayIcon::Trigger
+                || reason == QSystemTrayIcon::DoubleClick) {
                 window.showPanel();
             }
         });
