@@ -1,4 +1,4 @@
-#include "copy_gesture_monitor.h"
+﻿#include "copy_gesture_monitor.h"
 #include "main_window.h"
 #include "rounded_menu.h"
 
@@ -9,7 +9,7 @@
 #include <QIcon>
 #include <QLockFile>
 #include <QMenu>
-#include <QPainter>
+#include <QSettings>
 #include <QStandardPaths>
 #include <QSystemTrayIcon>
 #include <QTimer>
@@ -21,18 +21,22 @@
 namespace {
 QIcon createTrayIcon()
 {
-    QPixmap pixmap(64, 64);
-    pixmap.fill(Qt::transparent);
-    QPainter painter(&pixmap);
-    painter.setRenderHint(QPainter::Antialiasing);
-    painter.setBrush(QColor(QStringLiteral("#1a1c1f")));
-    painter.setPen(Qt::NoPen);
-    painter.drawRoundedRect(4, 4, 56, 56, 14, 14);
-    painter.setPen(QPen(Qt::white, 6, Qt::SolidLine, Qt::RoundCap));
-    painter.drawLine(22, 18, 22, 46);
-    painter.drawLine(22, 18, 41, 18);
-    painter.drawLine(22, 46, 41, 46);
-    return QIcon(pixmap);
+    return QIcon(QStringLiteral(":/resources/tray-icon.svg"));
+}
+
+void showFirstLaunchTutorial(QSystemTrayIcon& tray)
+{
+    QSettings settings;
+    if (settings.value(QStringLiteral("tutorial_shown"), false).toBool()) return;
+    settings.setValue(QStringLiteral("tutorial_shown"), true);
+
+    tray.showMessage(
+        QStringLiteral("IntentClip · 拾意"),
+        QStringLiteral(
+            "选中文本后，在 500ms 内连续按两次 Ctrl+C 即可唤起面板。\n"
+            "也可以从系统托盘随时打开。"),
+        QSystemTrayIcon::Information,
+        5000);
 }
 }
 
@@ -42,6 +46,8 @@ int main(int argc, char* argv[])
     QApplication::setApplicationName(QStringLiteral("IntentClip"));
     QApplication::setOrganizationName(QStringLiteral("IntentClip"));
     QApplication::setQuitOnLastWindowClosed(false);
+
+    QSettings::setDefaultFormat(QSettings::IniFormat);
 
     const QString lockPath = QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation))
         .filePath(QStringLiteral("IntentClip-single-instance.lock"));
@@ -131,6 +137,8 @@ int main(int argc, char* argv[])
     if (!monitor.start()) {
         tray.showMessage(QStringLiteral("IntentClip"), QStringLiteral("无法启用双复制监听，可从托盘手动打开面板。"));
     }
+
+    showFirstLaunchTutorial(tray);
 
     return application.exec();
 }

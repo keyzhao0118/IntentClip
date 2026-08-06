@@ -1,4 +1,4 @@
-#include "main_window.h"
+﻿#include "main_window.h"
 #include "circular_spinner.h"
 
 #include "function_settings_dialog.h"
@@ -8,12 +8,14 @@
 #include <QComboBox>
 #include <QFrame>
 #include <QApplication>
+#include <QClipboard>
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLayoutItem>
 #include <QScrollArea>
 #include <QScreen>
+#include <QSettings>
 #include <QSignalBlocker>
 #include <QTextCursor>
 #include <QTextEdit>
@@ -29,6 +31,7 @@
 
 constexpr int kContentViewportHeight = 191;
 constexpr int kResultViewportHeight = 180;
+
 namespace {
 QLabel* makeSectionTitle(const QString& title, QWidget* parent)
 {
@@ -43,7 +46,6 @@ QFrame* makeSection(QWidget* parent)
     section->setObjectName(QStringLiteral("section"));
     return section;
 }
-
 }
 
 MainWindow::MainWindow(QWidget* parent)
@@ -54,8 +56,6 @@ MainWindow::MainWindow(QWidget* parent)
     setWindowFlag(Qt::WindowContextHelpButtonHint, false);
     setWindowFlag(Qt::MSWindowsFixedSizeDialogHint, true);
     resize(700, 500);
-    // 纯内容区（结果区隐藏）的自然高度约 320px，最小高度不应把它撑出底部留白；
-    // 结果区显示时 sizeHint 约 600px+，不受此下限影响。
     setMinimumSize(600, 300);
 
     auto* rootLayout = new QVBoxLayout(this);
@@ -80,7 +80,7 @@ MainWindow::MainWindow(QWidget* parent)
     contentEdit_ = new QTextEdit(contentSection);
     contentEdit_->setObjectName(QStringLiteral("contentEdit"));
     contentEdit_->setReadOnly(true);
-    contentEdit_->setPlaceholderText(tr("双击 Ctrl+C 后，内容会出现在这里。"));
+    contentEdit_->setPlaceholderText(tr("双击 Ctrl+C 后，内容会出现在这里。双击此处可编辑内容。"));
     contentEdit_->setFixedHeight(kContentViewportHeight);
     contentEdit_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     contentEdit_->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
@@ -103,6 +103,12 @@ MainWindow::MainWindow(QWidget* parent)
     regenerateResultButton->setText(tr("重新生成"));
     regenerateResultButton->setToolTip(tr("重新执行当前选中的 AI 功能"));
     resultHeader->addWidget(regenerateResultButton);
+    copyResultButton_ = new QToolButton(resultSection_);
+    copyResultButton_->setObjectName(QStringLiteral("sectionAction"));
+    copyResultButton_->setText(tr("复制结果"));
+    copyResultButton_->setToolTip(tr("将 AI 处理结果复制到剪贴板"));
+    copyResultButton_->setEnabled(false);
+    resultHeader->addWidget(copyResultButton_);
     resultLayout->addLayout(resultHeader);
     resultLoadingLabel_ = new QLabel(tr("正在执行所选 AI 功能…"), resultSection_);
     resultLoadingContainer_ = new QFrame(resultSection_);
@@ -142,6 +148,15 @@ MainWindow::MainWindow(QWidget* parent)
     contentEdit_->viewport()->installEventFilter(this);
     connect(regenerateResultButton, &QToolButton::clicked, this, [this] {
         if (!currentIntent_.isEmpty()) beginFunctionExecution(true);
+    });
+    connect(copyResultButton_, &QToolButton::clicked, this, [this] {
+        if (resultBodyLabel_) {
+            QApplication::clipboard()->setText(resultBodyLabel_->text());
+            copyResultButton_->setText(tr("已复制"));
+            QTimer::singleShot(1500, this, [this] {
+                copyResultButton_->setText(tr("复制结果"));
+            });
+        }
     });
     connect(functionSelector_, &QComboBox::currentIndexChanged, this,
         [this](int index) {
@@ -184,6 +199,7 @@ MainWindow::MainWindow(QWidget* parent)
     });
 
     refreshFunctionSelection(false);
+    restoreWindowGeometry();
 
     setStyleSheet(QStringLiteral(R"(
         * { font-family: "Segoe UI", "Microsoft YaHei UI"; }
@@ -196,36 +212,6 @@ MainWindow::MainWindow(QWidget* parent)
         }
         #sectionTitle { color: #1a1c1f; font-size: 16px; font-weight: 700; }
         #contentEdit {
-            color: #1a1c1f; background-color: transparent;
-            border: 1px solid #e4e4e4; border-radius: 10px;
-            padding: 12px 14px; font-size: 14px;
-            selection-color: #1a1c1f; selection-background-color: #e8e9ea;
-        }
-        #contentEdit:focus { background-color: transparent; border: 1px solid #75777a; }
-        #loadingLabel { color: #5f6062; font-size: 13px; }
-        QToolButton#sectionAction {
-            color: #1a1c1f; background-color: #f0f1f2;
-            border: 1px solid #e4e4e4; border-radius: 8px;
-            padding: 6px 12px; font-size: 12px; font-weight: 650;
-        }
-        QToolButton#sectionAction:hover { color: #1a1c1f; background-color: #e6e7e8; border-color: #e4e4e4; }
-        QToolButton#sectionAction:pressed { background-color: #dcddde; }
-        QComboBox#functionSelector {
-            color: #1a1c1f; background: transparent;
-            border: 1px solid transparent; border-radius: 8px;
-            padding: 5px 12px; font-size: 14px; font-weight: 700;
-        }
-        QComboBox#functionSelector:hover { background-color: #f0f1f2; }
-        QComboBox#functionSelector:on { background-color: #f0f1f2; }
-        QComboBox#functionSelector:pressed { background-color: #e2e3e4; }
-        QComboBox#functionSelector::drop-down { border: none; width: 26px; }
-        QComboBox#functionSelector::down-arrow {
-            image: url(:/resources/down-arrow.png);
-            width: 14px;
-            height: 7px;
-            margin-right: 7px;
-        }
-        QComboBox#functionSelector QAbstractItemView {
             color: #1a1c1f; background: #ffffff;
             border: 1px solid #e4e4e4; border-radius: 8px;
             selection-background-color: #f0f1f2; padding: 4px;
@@ -244,6 +230,14 @@ MainWindow::MainWindow(QWidget* parent)
         QMenu::item { padding: 8px 22px 8px 12px; border-radius: 6px; }
         QMenu::item:selected { color: #1a1c1f; background: #f0f1f2; }
         QMenu::separator { height: 1px; background: #e4e4e4; margin: 5px 8px; }
+        QToolButton#sectionAction {
+            color: #5f6062; background-color: #f7f7f7;
+            border: 1px solid #e4e4e4; border-radius: 8px;
+            padding: 6px 14px; font-size: 12px; font-weight: 600;
+        }
+        QToolButton#sectionAction:hover {
+            color: #1a1c1f; background-color: #f0f1f2;
+        }
     )"));
 }
 
@@ -302,6 +296,7 @@ void MainWindow::invalidateCacheForContentChange()
 {
     const bool hadResultState = !resultCache_.isEmpty() || resultSection_->isVisible();
     resultCache_.clear();
+    copyResultButton_->setEnabled(false);
     if (inferenceClient_) inferenceClient_->invalidateExecution();
     if (!hadResultState) return;
 
@@ -341,23 +336,13 @@ void MainWindow::refreshFunctionSelection(bool executeSelection)
 
     if (currentIntent_.isEmpty()) {
         clearLayout(resultContentLayout_);
-        showResultStatus(tr("尚未配置功能，请在托盘“功能设置”中添加功能。"), false);
+        showResultStatus(tr("尚未配置功能，请在托盘「功能设置」中添加功能。"), false);
         updateExpandedSize();
         return;
     }
 
     if (executeSelection) {
         beginFunctionExecution(false);
-        return;
-    }
-    if (previousSelection != currentIntent_ && resultSection_->isVisible()) {
-        if (resultCache_.contains(currentIntent_)) {
-            renderResult(resultCache_.value(currentIntent_));
-        } else {
-            clearLayout(resultContentLayout_);
-            showResultStatus(tr("功能已切换，请重新生成。"), false);
-            updateExpandedSize();
-        }
     }
 }
 
@@ -391,9 +376,10 @@ void MainWindow::beginFunctionExecution(bool forceRegeneration)
     }
 
     streamingIntent_ = currentIntent_;
+    copyResultButton_->setEnabled(false);
     resultBodyLabel_.clear();
     clearLayout(resultContentLayout_);
-    showResultStatus(tr("正在执行“%1”…").arg(definition->name), true);
+    showResultStatus(tr("正在执行「%1」…").arg(definition->name), true);
     inferenceClient_->executeFunction(
         contentEdit_->toPlainText(), currentIntent_, definition->actionPrompt);
     updateExpandedSize();
@@ -420,6 +406,7 @@ void MainWindow::renderResult(const QString& body)
     resultContent_->adjustSize();
     resultScrollArea_->show();
     resultSection_->show();
+    copyResultButton_->setEnabled(true);
     updateExpandedSize();
 }
 
@@ -508,6 +495,30 @@ void MainWindow::clearLayout(QLayout* layout)
 
 void MainWindow::closeEvent(QCloseEvent* event)
 {
+    saveWindowGeometry();
     hide();
     event->ignore();
+}
+
+void MainWindow::saveWindowGeometry()
+{
+    QSettings settings;
+    settings.setValue(QStringLiteral("window/geometry"), saveGeometry());
+}
+
+void MainWindow::restoreWindowGeometry()
+{
+    QSettings settings;
+    const QByteArray geometry = settings.value(QStringLiteral("window/geometry")).toByteArray();
+    if (!geometry.isEmpty()) {
+        restoreGeometry(geometry);
+    } else {
+        resize(700, 500);
+        QScreen* targetScreen = screen();
+        if (!targetScreen) targetScreen = QGuiApplication::primaryScreen();
+        if (targetScreen) {
+            const QRect available = targetScreen->availableGeometry();
+            move((available.width() - width()) / 2, (available.height() - height()) / 2);
+        }
+    }
 }

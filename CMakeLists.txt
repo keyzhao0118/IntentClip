@@ -23,11 +23,12 @@ include(GNUInstallDirs)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
 
 # ============================================================
 # 依赖
 # ============================================================
-find_package(Qt6 6.5 REQUIRED COMPONENTS Widgets Network)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Widgets Network Svg)
 find_package(llama CONFIG REQUIRED)
 qt_standard_project_setup(REQUIRES 6.5)
 set(CMAKE_AUTORCC ON)
@@ -76,7 +77,8 @@ target_link_libraries(IntentClip
     PRIVATE
         Qt6::Widgets
         Qt6::Network
-)
+        Qt6::Svg
+    )
 
 if(WIN32)
     # Windows 上需要 user32 处理前台窗口/置顶等行为

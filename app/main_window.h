@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <QDialog>
 #include <QHash>
@@ -17,10 +17,12 @@ class QLayout;
 class CircularSpinner;
 class QScrollArea;
 class QTextEdit;
+class QToolButton;
 class QVBoxLayout;
 
 class MainWindow final : public QDialog
 {
+    Q_OBJECT
 public:
     explicit MainWindow(QWidget* parent = nullptr);
     void showClipboardText(const QString& text);
@@ -43,6 +45,8 @@ private:
     void enterContentEditMode();
     void finishContentEdit();
     bool isInsideContentEdit(QWidget* widget) const;
+    void saveWindowGeometry();
+    void restoreWindowGeometry();
 
     IntentPromptConfig promptConfig_;
     InferenceClient* inferenceClient_ = nullptr;
@@ -56,6 +60,7 @@ private:
     QFrame* resultContent_ = nullptr;
     QVBoxLayout* resultContentLayout_ = nullptr;
     QPointer<QLabel> resultBodyLabel_;
+    QToolButton* copyResultButton_ = nullptr;
     QString streamingIntent_;
     QHash<QString, QString> resultCache_;
     QString currentIntent_;
