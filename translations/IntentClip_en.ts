@@ -8,7 +8,7 @@
         <location line="+31"/>
         <location line="+79"/>
         <source>IntentClip</source>
-        <translation>IntentClip · 拾意</translation>
+        <translation>IntentClip</translation>
     </message>
     <message>
         <location line="-109"/>
@@ -363,7 +363,7 @@ Right-click to edit, set as default, or delete</source>
     <message>
         <location filename="../app/main_window.cpp" line="+54"/>
         <source>IntentClip</source>
-        <translation>IntentClip · 拾意</translation>
+        <translation>IntentClip</translation>
     </message>
     <message>
         <location line="+23"/>
