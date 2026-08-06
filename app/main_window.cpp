@@ -1,4 +1,4 @@
-﻿#include "main_window.h"
+#include "main_window.h"
 #include "circular_spinner.h"
 
 #include "function_settings_dialog.h"

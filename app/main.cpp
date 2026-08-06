@@ -1,4 +1,4 @@
-﻿#include "copy_gesture_monitor.h"
+#include "copy_gesture_monitor.h"
 #include "main_window.h"
 #include "rounded_menu.h"
 
@@ -26,10 +26,6 @@ QIcon createTrayIcon()
 
 void showFirstLaunchTutorial(QSystemTrayIcon& tray)
 {
-    QSettings settings;
-    if (settings.value(QStringLiteral("tutorial_shown"), false).toBool()) return;
-    settings.setValue(QStringLiteral("tutorial_shown"), true);
-
     tray.showMessage(
         QStringLiteral("IntentClip · 拾意"),
         QStringLiteral(
