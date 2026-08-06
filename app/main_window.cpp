@@ -95,7 +95,7 @@ MainWindow::MainWindow(QWidget* parent)
     functionSelector_ = new QComboBox(resultSection_);
     functionSelector_->setObjectName(QStringLiteral("functionSelector"));
     functionSelector_->setToolTip(tr("选择要执行的 AI 功能；切换后立即按当前 Content 重新生成"));
-    functionSelector_->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    functionSelector_->setSizeAdjustPolicy(QComboBox::AdjustToContents);
     resultHeader->addWidget(functionSelector_);
     resultHeader->addStretch();
     auto* regenerateResultButton = new QToolButton(resultSection_);
@@ -211,16 +211,17 @@ MainWindow::MainWindow(QWidget* parent)
         QToolButton#sectionAction:hover { color: #1a1c1f; background-color: #e6e7e8; border-color: #e4e4e4; }
         QToolButton#sectionAction:pressed { background-color: #dcddde; }
         QComboBox#functionSelector {
-            color: #1a1c1f; background-color: #f0f1f2;
-            border: 1px solid #e4e4e4; border-radius: 8px;
+            color: #1a1c1f; background: transparent;
+            border: 1px solid transparent; border-radius: 8px;
             padding: 5px 12px; font-size: 14px; font-weight: 700;
-            min-width: 180px;
         }
-        QComboBox#functionSelector:hover { background-color: #e6e7e8; border-color: #e4e4e4; }
+        QComboBox#functionSelector:hover { background-color: #f0f1f2; }
+        QComboBox#functionSelector:on { background-color: #f0f1f2; }
+        QComboBox#functionSelector:pressed { background-color: #e2e3e4; }
         QComboBox#functionSelector::drop-down { border: none; width: 26px; }
         QComboBox#functionSelector::down-arrow {
             image: url(:/resources/down-arrow.png);
-            width: 12px;
+            width: 14px;
             height: 7px;
             margin-right: 7px;
         }
