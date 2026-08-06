@@ -51,7 +51,7 @@ QFrame* makeSection(QWidget* parent)
 MainWindow::MainWindow(QWidget* parent)
     : QDialog(parent)
 {
-    setWindowTitle(tr("IntentClip · 拾意"));
+    setWindowTitle(tr("IntentClip"));
     setObjectName(QStringLiteral("mainDialog"));
     setWindowFlag(Qt::WindowContextHelpButtonHint, false);
     setWindowFlag(Qt::MSWindowsFixedSizeDialogHint, true);
@@ -80,7 +80,7 @@ MainWindow::MainWindow(QWidget* parent)
     contentEdit_ = new QTextEdit(contentSection);
     contentEdit_->setObjectName(QStringLiteral("contentEdit"));
     contentEdit_->setReadOnly(true);
-    contentEdit_->setPlaceholderText(tr("双击 Ctrl+C 后，内容会出现在这里。双击此处可编辑内容。"));
+    contentEdit_->setPlaceholderText(tr("After double-pressing Ctrl+C, the copied content will appear here. Double-click here to edit it."));
     contentEdit_->setFixedHeight(kContentViewportHeight);
     contentEdit_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     contentEdit_->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
@@ -94,23 +94,23 @@ MainWindow::MainWindow(QWidget* parent)
     auto* resultHeader = new QHBoxLayout;
     functionSelector_ = new QComboBox(resultSection_);
     functionSelector_->setObjectName(QStringLiteral("functionSelector"));
-    functionSelector_->setToolTip(tr("选择要执行的 AI 功能；切换后立即按当前 Content 重新生成"));
+    functionSelector_->setToolTip(tr("Select the AI function to run; switching regenerates immediately using the current Content"));
     functionSelector_->setSizeAdjustPolicy(QComboBox::AdjustToContents);
     resultHeader->addWidget(functionSelector_);
     resultHeader->addStretch();
     auto* regenerateResultButton = new QToolButton(resultSection_);
     regenerateResultButton->setObjectName(QStringLiteral("sectionAction"));
-    regenerateResultButton->setText(tr("重新生成"));
-    regenerateResultButton->setToolTip(tr("重新执行当前选中的 AI 功能"));
+    regenerateResultButton->setText(tr("Regenerate"));
+    regenerateResultButton->setToolTip(tr("Re-run the currently selected AI function"));
     resultHeader->addWidget(regenerateResultButton);
     copyResultButton_ = new QToolButton(resultSection_);
     copyResultButton_->setObjectName(QStringLiteral("sectionAction"));
-    copyResultButton_->setText(tr("复制结果"));
-    copyResultButton_->setToolTip(tr("将 AI 处理结果复制到剪贴板"));
+    copyResultButton_->setText(tr("Copy Result"));
+    copyResultButton_->setToolTip(tr("Copy the AI result to the clipboard"));
     copyResultButton_->setEnabled(false);
     resultHeader->addWidget(copyResultButton_);
     resultLayout->addLayout(resultHeader);
-    resultLoadingLabel_ = new QLabel(tr("正在执行所选 AI 功能…"), resultSection_);
+    resultLoadingLabel_ = new QLabel(tr("Running the selected AI function…"), resultSection_);
     resultLoadingContainer_ = new QFrame(resultSection_);
     resultLoadingContainer_->setFixedHeight(kResultViewportHeight);
     auto* resultLoadingLayout = new QVBoxLayout(resultLoadingContainer_);
@@ -152,9 +152,9 @@ MainWindow::MainWindow(QWidget* parent)
     connect(copyResultButton_, &QToolButton::clicked, this, [this] {
         if (resultBodyLabel_) {
             QApplication::clipboard()->setText(resultBodyLabel_->text());
-            copyResultButton_->setText(tr("已复制"));
+            copyResultButton_->setText(tr("Copied"));
             QTimer::singleShot(1500, this, [this] {
-                copyResultButton_->setText(tr("复制结果"));
+                copyResultButton_->setText(tr("Copy Result"));
             });
         }
     });
@@ -190,11 +190,11 @@ MainWindow::MainWindow(QWidget* parent)
     connect(inferenceClient_, &InferenceClient::executionError, this,
         [this](const QString& intentId, const QString& message) {
             if (intentId != currentIntent_) return;
-            showResultStatus(tr("执行失败：%1").arg(message), false);
+            showResultStatus(tr("Execution failed: %1").arg(message), false);
             updateExpandedSize();
         });
     connect(inferenceClient_, &InferenceClient::inferenceError, this, [this](const QString& message) {
-        showResultStatus(tr("本地模型错误：%1").arg(message), false);
+        showResultStatus(tr("Local model error: %1").arg(message), false);
         updateExpandedSize();
     });
 
@@ -301,7 +301,7 @@ void MainWindow::invalidateCacheForContentChange()
     if (!hadResultState) return;
 
     clearLayout(resultContentLayout_);
-    showResultStatus(tr("Content 已变化，请重新生成当前功能的结果。"), false);
+    showResultStatus(tr("Content has changed; please regenerate the result of the current function."), false);
     updateExpandedSize();
 }
 
@@ -313,7 +313,7 @@ void MainWindow::refreshFunctionSelection(bool executeSelection)
     if (!configError.isEmpty()) {
         functionSelector_->clear();
         currentIntent_.clear();
-        showResultStatus(tr("配置错误：%1").arg(configError), false);
+        showResultStatus(tr("Configuration error: %1").arg(configError), false);
         updateExpandedSize();
         return;
     }
@@ -336,7 +336,7 @@ void MainWindow::refreshFunctionSelection(bool executeSelection)
 
     if (currentIntent_.isEmpty()) {
         clearLayout(resultContentLayout_);
-        showResultStatus(tr("尚未配置功能，请在托盘「功能设置」中添加功能。"), false);
+        showResultStatus(tr("No functions configured. Add one from Function Settings in the tray."), false);
         updateExpandedSize();
         return;
     }
@@ -370,7 +370,7 @@ void MainWindow::beginFunctionExecution(bool forceRegeneration)
 
     const IntentDefinition* definition = promptConfig_.findById(currentIntent_);
     if (!definition || definition->actionPrompt.trimmed().isEmpty()) {
-        showResultStatus(tr("功能执行提示词为空。"), false);
+        showResultStatus(tr("The execution prompt of the function is empty."), false);
         updateExpandedSize();
         return;
     }
@@ -379,7 +379,7 @@ void MainWindow::beginFunctionExecution(bool forceRegeneration)
     copyResultButton_->setEnabled(false);
     resultBodyLabel_.clear();
     clearLayout(resultContentLayout_);
-    showResultStatus(tr("正在执行「%1」…").arg(definition->name), true);
+    showResultStatus(tr("Running \"%1\"…").arg(definition->name), true);
     inferenceClient_->executeFunction(
         contentEdit_->toPlainText(), currentIntent_, definition->actionPrompt);
     updateExpandedSize();

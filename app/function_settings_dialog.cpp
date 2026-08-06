@@ -3,6 +3,7 @@
 #include "prompt_settings_dialog.h"
 #include "rounded_menu.h"
 
+#include <QCoreApplication>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -22,7 +23,9 @@
 namespace {
 QString functionButtonText(const QString& name, bool isDefault)
 {
-    return isDefault ? QStringLiteral("%1  ·  默认").arg(name) : name;
+    return isDefault
+        ? QCoreApplication::translate("FunctionSettingsDialog", "%1 · Default").arg(name)
+        : name;
 }
 
 QIcon createPlusIcon()
@@ -41,7 +44,7 @@ QIcon createPlusIcon()
 FunctionSettingsDialog::FunctionSettingsDialog(QWidget* parent)
     : QDialog(parent)
 {
-    setWindowTitle(tr("功能设置"));
+    setWindowTitle(tr("Function Settings"));
     setObjectName(QStringLiteral("functionSettingsDialog"));
     setFixedSize(700, 540);
 
@@ -54,15 +57,15 @@ FunctionSettingsDialog::FunctionSettingsDialog(QWidget* parent)
 
     auto* explanation = new QLabel(
         loadError.isEmpty()
-            ? tr("管理功能矩阵：每个功能一个标签，右键可编辑、设为默认或删除。")
-            : tr("配置错误：%1").arg(loadError),
+            ? tr("Manage the function matrix: one card per function. Right-click to edit, set as default, or delete.")
+            : tr("Configuration error: %1").arg(loadError),
         this);
     explanation->setObjectName(QStringLiteral("dialogExplanation"));
     explanation->setWordWrap(true);
     layout->addWidget(explanation);
 
     auto* header = new QHBoxLayout;
-    auto* title = new QLabel(tr("功能矩阵"), this);
+    auto* title = new QLabel(tr("Function Matrix"), this);
     title->setObjectName(QStringLiteral("sectionTitle"));
     header->addWidget(title);
     header->addStretch();
@@ -83,14 +86,14 @@ FunctionSettingsDialog::FunctionSettingsDialog(QWidget* parent)
     scrollArea->setWidget(optionsFrame_);
     layout->addWidget(scrollArea, 1);
 
-    emptyLabel_ = new QLabel(tr("尚未配置功能，点击“添加功能”创建一个。"), this);
+    emptyLabel_ = new QLabel(tr("No functions configured yet. Click \"Add Function\" to create one."), this);
     emptyLabel_->setObjectName(QStringLiteral("sectionHint"));
     emptyLabel_->setAlignment(Qt::AlignCenter);
     layout->addWidget(emptyLabel_);
 
     auto* bottom = new QHBoxLayout;
     bottom->addStretch();
-    auto* restoreButton = new QPushButton(tr("恢复默认"), this);
+    auto* restoreButton = new QPushButton(tr("Restore Defaults"), this);
     bottom->addWidget(restoreButton);
     layout->addLayout(bottom);
 
@@ -179,7 +182,7 @@ void FunctionSettingsDialog::refreshFunctionButtons()
         const bool isDefault = definition.id == config_.defaultFunctionId;
         button->setProperty("isDefault", isDefault);
         button->setText(functionButtonText(definition.name, isDefault));
-        button->setToolTip(definition.description + tr("\n右键可编辑、设为默认或删除"));
+        button->setToolTip(definition.description + tr("\nRight-click to edit, set as default, or delete"));
         button->setToolButtonStyle(Qt::ToolButtonTextOnly);
         button->setFixedSize(200, 52);
         connect(button, &QToolButton::customContextMenuRequested, this,
@@ -188,13 +191,13 @@ void FunctionSettingsDialog::refreshFunctionButtons()
                 const IntentDefinition* current = config_.findById(functionId);
                 if (!current) return;
                 RoundedMenu menu(this);
-                QAction* editAction = menu.addAction(tr("编辑功能"));
+                QAction* editAction = menu.addAction(tr("Edit Function"));
                 QAction* defaultAction = menu.addAction(
                     current->id == config_.defaultFunctionId
-                        ? tr("当前默认功能") : tr("设为默认功能"));
+                        ? tr("Current Default Function") : tr("Set as Default Function"));
                 defaultAction->setEnabled(!(current->id == config_.defaultFunctionId));
                 menu.addSeparator();
-                QAction* deleteAction = menu.addAction(tr("删除功能"));
+                QAction* deleteAction = menu.addAction(tr("Delete Function"));
                 QAction* selected = menu.exec(button->mapToGlobal(position));
                 if (selected == editAction) editFunction(functionId);
                 else if (selected == defaultAction) setDefaultFunction(functionId);
@@ -207,8 +210,8 @@ void FunctionSettingsDialog::refreshFunctionButtons()
 
     auto* addButton = new QToolButton(optionsFrame_);
     addButton->setObjectName(QStringLiteral("addFunctionButton"));
-    addButton->setText(tr("添加功能"));
-    addButton->setToolTip(tr("新增一个 AI 功能"));
+    addButton->setText(tr("Add Function"));
+    addButton->setToolTip(tr("Add a new AI function"));
     addButton->setIcon(createPlusIcon());
     addButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     addButton->setFixedSize(200, 52);
@@ -225,7 +228,7 @@ bool FunctionSettingsDialog::saveConfig()
 {
     QString error;
     if (!config_.save(&error)) {
-        QMessageBox::warning(this, tr("配置无效"), error);
+        QMessageBox::warning(this, tr("Invalid Configuration"), error);
         return false;
     }
     return true;
@@ -235,9 +238,9 @@ void FunctionSettingsDialog::addFunction()
 {
     IntentDefinition definition{
         QStringLiteral("function_") + QUuid::createUuid().toString(QUuid::Id128).left(16),
-        tr("新功能"),
-        tr("请填写一句话功能描述。"),
-        tr("请说明点击功能后，本地模型应如何处理 Content 内容。")
+        tr("New Function"),
+        tr("Write a one-sentence description of the function."),
+        tr("Explain what the local model should do with the Content when this function runs.")
     };
     PromptSettingsDialog dialog(definition, this);
     if (dialog.exec() != QDialog::Accepted) return;
@@ -270,8 +273,8 @@ void FunctionSettingsDialog::deleteFunction(const QString& functionId)
 {
     const IntentDefinition* target = config_.findById(functionId);
     if (!target) return;
-    if (QMessageBox::question(this, tr("删除功能"),
-            tr("确定删除“%1”吗？").arg(target->name),
+    if (QMessageBox::question(this, tr("Delete Function"),
+            tr("Delete \"%1\"?").arg(target->name),
             QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes) return;
 
     const bool deletedDefault = config_.defaultFunctionId == functionId;
@@ -297,8 +300,8 @@ void FunctionSettingsDialog::setDefaultFunction(const QString& functionId)
 
 void FunctionSettingsDialog::restoreDefaultFunctions()
 {
-    if (QMessageBox::question(this, tr("恢复默认功能"),
-            tr("这会删除当前自定义功能并恢复内置的 5 个功能，是否继续？"),
+    if (QMessageBox::question(this, tr("Restore Default Functions"),
+            tr("This will delete your custom functions and restore the 5 built-in functions. Continue?"),
             QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes) return;
     config_ = IntentPromptConfig::defaults();
     if (!saveConfig()) return;

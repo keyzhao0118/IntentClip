@@ -1,4 +1,5 @@
 #include "inference_client.h"
+#include "i18n.h"
 
 #include <QCoreApplication>
 #include <QDebug>
@@ -53,7 +54,7 @@ InferenceClient::InferenceClient(QObject* parent)
             if (type == QStringLiteral("result") && responseId == latestExecution_) {
                 const QString result = response.value(QStringLiteral("result")).toString().trimmed();
                 if (!result.isEmpty()) emit resultReady(intentId, result);
-                else emit executionError(intentId, tr("模型返回了空结果。"));
+                else emit executionError(intentId, tr("The model returned an empty result."));
 
                 const QJsonObject metrics = response.value(QStringLiteral("metrics")).toObject();
                 if (!metrics.isEmpty()) {
@@ -72,13 +73,13 @@ InferenceClient::InferenceClient(QObject* parent)
         }
     });
     connect(worker_, &QProcess::errorOccurred, this, [this](QProcess::ProcessError) {
-        emit inferenceError(tr("无法启动本地推理进程：%1").arg(worker_->errorString()));
+        emit inferenceError(tr("Failed to start the local inference process: %1").arg(worker_->errorString()));
     });
     connect(worker_, &QProcess::finished, this, [this](int exitCode, QProcess::ExitStatus status) {
         connectTimer_->stop();
         socket_->abort();
         if (status == QProcess::CrashExit || exitCode != 0)
-            emit inferenceError(tr("本地推理进程已退出（代码 %1）。").arg(exitCode));
+            emit inferenceError(tr("The local inference process exited (code %1).").arg(exitCode));
     });
 
     QTimer::singleShot(0, this, &InferenceClient::startWorker);
@@ -119,9 +120,11 @@ void InferenceClient::startWorker()
     const QString executable = QDir(QCoreApplication::applicationDirPath())
         .filePath(QStringLiteral("IntentClipInference.exe"));
     worker_->setProgram(executable);
+    const QString locale = appTranslationLocale();
     worker_->setArguments({
         QStringLiteral("--server"), serverName_,
-        QStringLiteral("--model"), modelPath()
+        QStringLiteral("--model"), modelPath(),
+        QStringLiteral("--locale"), locale
     });
     worker_->start();
     connectionAttempts_ = 0;
@@ -152,7 +155,7 @@ void InferenceClient::ensureConnected()
     socket_->connectToServer(serverName_);
     if (++connectionAttempts_ > 300) {
         connectTimer_->stop();
-        emit inferenceError(tr("连接本地推理进程超时。"));
+        emit inferenceError(tr("Timed out connecting to the local inference process."));
     }
 }
 

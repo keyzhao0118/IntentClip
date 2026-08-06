@@ -12,7 +12,7 @@ PromptSettingsDialog::PromptSettingsDialog(const IntentDefinition& definition, Q
     : QDialog(parent)
     , id_(definition.id)
 {
-    setWindowTitle(tr("编辑功能"));
+    setWindowTitle(tr("Edit Function"));
     setObjectName(QStringLiteral("promptSettingsDialog"));
     resize(660, 460);
     setMinimumSize(540, 380);
@@ -21,7 +21,7 @@ PromptSettingsDialog::PromptSettingsDialog(const IntentDefinition& definition, Q
     layout->setContentsMargins(28, 26, 28, 24);
     layout->setSpacing(18);
     auto* explanation = new QLabel(
-        tr("修改功能在 Intent 区显示的名称、说明，以及点击后发送给本地模型的执行提示词。"), this);
+        tr("Edit the name, description, and the execution prompt sent to the local model when the function runs."), this);
     explanation->setObjectName(QStringLiteral("dialogExplanation"));
     explanation->setWordWrap(true);
     layout->addWidget(explanation);
@@ -37,10 +37,10 @@ PromptSettingsDialog::PromptSettingsDialog(const IntentDefinition& definition, Q
     description_->setMaxLength(120);
     actionPrompt_ = new QPlainTextEdit(definition.actionPrompt, this);
     actionPrompt_->setMinimumHeight(180);
-    actionPrompt_->setPlaceholderText(tr("说明模型应如何处理 Content 内容，并直接输出最终结果。"));
-    form->addRow(tr("功能名称"), name_);
-    form->addRow(tr("一句话描述"), description_);
-    form->addRow(tr("功能执行提示词"), actionPrompt_);
+    actionPrompt_->setPlaceholderText(tr("Describe how the model should process the Content and directly output the final result."));
+    form->addRow(tr("Function Name"), name_);
+    form->addRow(tr("One-line Description"), description_);
+    form->addRow(tr("Execution Prompt"), actionPrompt_);
     layout->addLayout(form, 1);
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, this);
@@ -100,7 +100,7 @@ void PromptSettingsDialog::accept()
 {
     const IntentDefinition value = definition();
     if (value.name.isEmpty() || value.description.isEmpty() || value.actionPrompt.isEmpty()) {
-        QMessageBox::warning(this, tr("配置无效"), tr("名称、描述和功能执行提示词均不能为空。"));
+        QMessageBox::warning(this, tr("Invalid Configuration"), tr("Name, description, and execution prompt must not be empty."));
         return;
     }
     QDialog::accept();

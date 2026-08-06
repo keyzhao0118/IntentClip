@@ -28,7 +28,7 @@ add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
 # ============================================================
 # 依赖
 # ============================================================
-find_package(Qt6 6.5 REQUIRED COMPONENTS Widgets Network Svg)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Widgets Network Svg LinguistTools)
 find_package(llama CONFIG REQUIRED)
 qt_standard_project_setup(REQUIRES 6.5)
 set(CMAKE_AUTORCC ON)
@@ -57,6 +57,8 @@ endif()
 qt_add_executable(IntentClip
     app/intent_prompt_config.cpp
     app/intent_prompt_config.h
+    app/i18n.cpp
+    app/i18n.h
     app/inference_client.cpp
     app/inference_client.h
     app/copy_gesture_monitor.cpp
@@ -117,7 +119,6 @@ if(WIN32)
     # --- 构建后：用 windeployqt 把 Qt 运行库部署到可执行文件旁 ---
     add_custom_command(TARGET IntentClip POST_BUILD
         COMMAND "$<TARGET_FILE:Qt6::windeployqt>"
-            --no-translations
             --dir "$<TARGET_FILE_DIR:IntentClip>"
             "$<TARGET_FILE:IntentClip>"
         COMMENT "Deploying the Qt runtime with windeployqt"
@@ -145,17 +146,54 @@ set_target_properties(IntentClip IntentClipInference PROPERTIES
 )
 
 # ============================================================
-# 安装规则
+# 国际化：lupdate 扫描源码生成 .ts，lrelease 在构建时生成 .qm
 # ============================================================
+set(INTENTCLIP_TS_FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/translations/IntentClip_zh_CN.ts
+    ${CMAKE_CURRENT_SOURCE_DIR}/translations/IntentClip_en.ts
+)
+
+qt_add_translations(IntentClip
+    SOURCE_TARGETS IntentClip
+    SOURCES
+        worker/main.cpp
+    TS_FILES ${INTENTCLIP_TS_FILES}
+    QM_FILES_OUTPUT_VARIABLE intentclip_qm_files
+    QM_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/translations
+    LUPDATE_OPTIONS "-locations" "relative"
+)
+# 保证只构建 IntentClip 目标时也会先生成 .qm
+add_dependencies(IntentClip IntentClip_lrelease)
+
+# 构建后：把应用 .qm 复制到可执行文件旁的 translations/ 目录
+add_custom_command(TARGET IntentClip POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        "$<TARGET_FILE_DIR:IntentClip>/translations"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${intentclip_qm_files}
+        "$<TARGET_FILE_DIR:IntentClip>/translations"
+    COMMENT "Deploying application translation catalogs (.qm)"
+    VERBATIM
+)
+
+# ============================================================
+# 安装规则
 install(TARGETS IntentClip IntentClipInference
-    RUNTIME_DEPENDENCIES
-        PRE_EXCLUDE_REGEXES
-            "api-ms-.*"
-            "ext-ms-.*"
-        POST_EXCLUDE_REGEXES
-            ".*[Ww]indows[/\\\\][Ss]ystem32[/\\\\].*\\.dll"
     BUNDLE DESTINATION .
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+# 运行时 DLL（Qt、llama、ggml 及传递依赖）来自构建输出目录，
+# 该目录已由 POST_BUILD 阶段的 windeployqt 补齐，安装时整目录拷贝。
+install(DIRECTORY "$<TARGET_FILE_DIR:IntentClip>/"
+    DESTINATION ${CMAKE_INSTALL_BINDIR}
+    FILES_MATCHING
+        PATTERN "*.dll"
+)
+
+# 翻译：应用 .qm 安装到可执行文件旁的 translations/ 目录
+install(FILES ${intentclip_qm_files}
+    DESTINATION ${CMAKE_INSTALL_BINDIR}/translations
 )
 
 # 配置与模型：安装到可执行文件旁的 config/ 与 models/
@@ -172,7 +210,7 @@ install(
 qt_generate_deploy_app_script(
     TARGET IntentClip
     OUTPUT_SCRIPT intentclip_qt_deploy_script
-    NO_TRANSLATIONS
 )
 install(CODE "set(QT_DEPLOY_PLUGINS_DIR \"${CMAKE_INSTALL_BINDIR}\")")
+install(CODE "set(QT_DEPLOY_TRANSLATIONS_DIR \"${CMAKE_INSTALL_BINDIR}/translations\")")
 install(SCRIPT ${intentclip_qt_deploy_script})

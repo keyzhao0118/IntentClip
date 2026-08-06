@@ -9,6 +9,7 @@ class QPlainTextEdit;
 
 class PromptSettingsDialog final : public QDialog
 {
+    Q_OBJECT
 public:
     explicit PromptSettingsDialog(const IntentDefinition& definition, QWidget* parent = nullptr);
     IntentDefinition definition() const;

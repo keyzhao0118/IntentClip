@@ -1,4 +1,5 @@
 #include "copy_gesture_monitor.h"
+#include "i18n.h"
 #include "main_window.h"
 #include "rounded_menu.h"
 
@@ -27,10 +28,10 @@ QIcon createTrayIcon()
 void showFirstLaunchTutorial(QSystemTrayIcon& tray)
 {
     tray.showMessage(
-        QStringLiteral("IntentClip · 拾意"),
-        QStringLiteral(
-            "选中文本后，在 500ms 内连续按两次 Ctrl+C 即可唤起面板。\n"
-            "也可以从系统托盘随时打开。"),
+        QCoreApplication::translate("App", "IntentClip"),
+        QCoreApplication::translate("App",
+            "After selecting text, press Ctrl+C twice within 500 ms to open the panel.\n"
+            "You can also open it from the system tray at any time."),
         QSystemTrayIcon::Information,
         5000);
 }
@@ -42,6 +43,8 @@ int main(int argc, char* argv[])
     QApplication::setApplicationName(QStringLiteral("IntentClip"));
     QApplication::setOrganizationName(QStringLiteral("IntentClip"));
     QApplication::setQuitOnLastWindowClosed(false);
+
+    installAppTranslations(application);
 
     QSettings::setDefaultFormat(QSettings::IniFormat);
 
@@ -56,7 +59,7 @@ int main(int argc, char* argv[])
     QApplication::setWindowIcon(icon);
 
     QSystemTrayIcon tray(icon);
-    tray.setToolTip(QStringLiteral("IntentClip · 拾意"));
+    tray.setToolTip(QCoreApplication::translate("App", "IntentClip"));
     RoundedMenu trayMenu;
     trayMenu.setObjectName(QStringLiteral("trayMenu"));
     trayMenu.setStyleSheet(QStringLiteral(R"(
@@ -79,9 +82,12 @@ int main(int argc, char* argv[])
             background-color: #f0f1f2;
         }
     )"));
-    QAction* openAction = trayMenu.addAction(QStringLiteral("打开面板"));
-    QAction* settingsAction = trayMenu.addAction(QStringLiteral("功能设置"));
-    QAction* quitAction = trayMenu.addAction(QStringLiteral("退出"));
+    QAction* openAction = trayMenu.addAction(
+        QCoreApplication::translate("App", "Open Panel"));
+    QAction* settingsAction = trayMenu.addAction(
+        QCoreApplication::translate("App", "Function Settings"));
+    QAction* quitAction = trayMenu.addAction(
+        QCoreApplication::translate("App", "Quit"));
     tray.setContextMenu(&trayMenu);
 
     CopyGestureMonitor monitor;
@@ -131,7 +137,11 @@ int main(int argc, char* argv[])
 
     tray.show();
     if (!monitor.start()) {
-        tray.showMessage(QStringLiteral("IntentClip"), QStringLiteral("无法启用双复制监听，可从托盘手动打开面板。"));
+        tray.showMessage(
+            QCoreApplication::translate("App", "IntentClip"),
+            QCoreApplication::translate("App",
+                "Failed to enable the double-copy listener. "
+                "You can still open the panel from the tray."));
     }
 
     showFirstLaunchTutorial(tray);

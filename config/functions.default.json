@@ -4,33 +4,33 @@
   "functions": [
     {
       "id": "generate_reply",
-      "name": "生成回复",
-      "description": "处理邮件、通知、聊天消息。",
-      "action_prompt": "根据原文起草一份可直接发送的回复。结合上下文选择恰当语气，覆盖需要回应的问题、请求或通知，不要虚构事实。"
+      "name": "Generate Reply",
+      "description": "Handle emails, notifications, and chat messages.",
+      "action_prompt": "Draft a ready-to-send reply based on the original text. Choose an appropriate tone for the context, cover every question, request, or notice that needs a response, and do not invent facts."
     },
     {
       "id": "polish_rewrite",
-      "name": "润色改写",
-      "description": "改善公文、邮件、汇报和通知的表达。",
-      "action_prompt": "在不改变原意和事实的前提下润色原文，改善措辞、语气、结构、专业性和可读性。直接输出完整改写稿。"
+      "name": "Polish & Rewrite",
+      "description": "Improve the wording of documents, emails, reports, and notices.",
+      "action_prompt": "Polish the original text without changing its meaning or facts. Improve wording, tone, structure, professionalism, and readability. Output the complete revised text directly."
     },
     {
       "id": "summarize_points",
-      "name": "总结要点",
-      "description": "压缩长邮件、会议记录和材料。",
-      "action_prompt": "提炼原文的核心结论、关键背景和主要事项，使用简洁的分点结构输出，不遗漏重要限制与数字。"
+      "name": "Summarize Key Points",
+      "description": "Condense long emails, meeting notes, and materials.",
+      "action_prompt": "Extract the core conclusions, key background, and main items from the original text. Use concise bullet points and do not omit important limitations or numbers."
     },
     {
       "id": "explain_content",
-      "name": "解释内容",
-      "description": "理解制度、术语、复杂要求和陌生材料。",
-      "action_prompt": "用通俗、准确的语言解释原文中的制度、术语和复杂要求；必要时拆解概念并说明实际影响。"
+      "name": "Explain Content",
+      "description": "Understand rules, terminology, complex requirements, and unfamiliar material.",
+      "action_prompt": "Explain the rules, terminology, and complex requirements in the original text in plain, accurate language. Break down concepts when needed and state their practical impact."
     },
     {
       "id": "extract_information",
-      "name": "提取信息",
-      "description": "整理时间、人员、事项、金额、联系方式等。",
-      "action_prompt": "从原文提取可核实的信息，按时间、地点、人员、事项、金额、联系方式、编号和截止日期等字段结构化整理；没有的字段不要编造。"
+      "name": "Extract Information",
+      "description": "Organize dates, people, items, amounts, and contact details.",
+      "action_prompt": "Extract verifiable information from the original text and structure it into fields such as date, place, people, items, amounts, contact details, reference numbers, and deadlines. Do not invent missing fields."
     }
   ]
 }

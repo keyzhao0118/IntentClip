@@ -1,5 +1,6 @@
 #include "intent_prompt_config.h"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfoList>
@@ -32,7 +33,9 @@ QString fallbackActionPrompt(const QString& id, const QString& name)
     for (const IntentDefinition& definition : IntentPromptConfig::defaults().intents) {
         if (definition.id == id) return definition.actionPrompt;
     }
-    return QStringLiteral("根据用户提供的内容执行“%1”功能。直接给出可用结果，不要解释处理过程。").arg(name);
+    return QCoreApplication::translate("IntentPromptConfig",
+        "Execute the \"%1\" function on the provided content. "
+        "Return a usable result directly and do not explain the process.").arg(name);
 }
 
 bool readDefinition(
@@ -49,7 +52,7 @@ bool readDefinition(
         definition->actionPrompt = fallbackActionPrompt(definition->id, definition->name);
     if (!isValidId(definition->id) || definition->name.isEmpty()
         || definition->description.isEmpty() || definition->actionPrompt.isEmpty()) {
-        *error = QStringLiteral("功能配置缺少合法的 id、名称、描述或功能执行提示词。");
+        *error = QCoreApplication::translate("IntentPromptConfig", "Function configuration is missing a valid id, name, description, or execution prompt.");
         return false;
     }
     return true;
@@ -62,11 +65,11 @@ bool validateConfig(const IntentPromptConfig& config, QString* error)
     for (const IntentDefinition& definition : config.intents) {
         if (!isValidId(definition.id) || definition.name.trimmed().isEmpty()
             || definition.description.trimmed().isEmpty() || definition.actionPrompt.trimmed().isEmpty()) {
-            *error = QStringLiteral("功能“%1”的配置不完整。").arg(definition.name);
+            *error = QCoreApplication::translate("IntentPromptConfig", "Function \"%1\" is incomplete.").arg(definition.name);
             return false;
         }
         if (ids.contains(definition.id) || names.contains(definition.name.trimmed())) {
-            *error = QStringLiteral("功能 id 或名称不能重复。");
+            *error = QCoreApplication::translate("IntentPromptConfig", "Function ids and names must be unique.");
             return false;
         }
         ids.insert(definition.id);
@@ -74,11 +77,11 @@ bool validateConfig(const IntentPromptConfig& config, QString* error)
     }
     if (config.intents.isEmpty()) {
         if (!config.defaultFunctionId.isEmpty()) {
-            *error = QStringLiteral("没有功能时不能设置默认功能。");
+            *error = QCoreApplication::translate("IntentPromptConfig", "A default function cannot be set when there are no functions.");
             return false;
         }
     } else if (!ids.contains(config.defaultFunctionId)) {
-        *error = QStringLiteral("默认功能必须引用一个已配置的功能。");
+        *error = QCoreApplication::translate("IntentPromptConfig", "The default function must reference a configured function.");
         return false;
     }
     return true;
@@ -126,33 +129,53 @@ IntentPromptConfig IntentPromptConfig::defaults()
         {
             {
                 QStringLiteral("generate_reply"),
-                QStringLiteral("生成回复"),
-                QStringLiteral("处理邮件、通知、聊天消息。"),
-                QStringLiteral("根据原文起草一份可直接发送的回复。结合上下文选择恰当语气，覆盖需要回应的问题、请求或通知，不要虚构事实。")
+                QCoreApplication::translate("IntentPromptConfig", "Generate Reply"),
+                QCoreApplication::translate("IntentPromptConfig",
+                    "Handle emails, notifications, and chat messages."),
+                QCoreApplication::translate("IntentPromptConfig",
+                    "Draft a ready-to-send reply based on the original text. "
+                    "Choose an appropriate tone for the context, cover every question, request, "
+                    "or notice that needs a response, and do not invent facts.")
             },
             {
                 QStringLiteral("polish_rewrite"),
-                QStringLiteral("润色改写"),
-                QStringLiteral("改善公文、邮件、汇报和通知的表达。"),
-                QStringLiteral("在不改变原意和事实的前提下润色原文，改善措辞、语气、结构、专业性和可读性。直接输出完整改写稿。")
+                QCoreApplication::translate("IntentPromptConfig", "Polish & Rewrite"),
+                QCoreApplication::translate("IntentPromptConfig",
+                    "Improve the wording of documents, emails, reports, and notices."),
+                QCoreApplication::translate("IntentPromptConfig",
+                    "Polish the original text without changing its meaning or facts. "
+                    "Improve wording, tone, structure, professionalism, and readability. "
+                    "Output the complete revised text directly.")
             },
             {
                 QStringLiteral("summarize_points"),
-                QStringLiteral("总结要点"),
-                QStringLiteral("压缩长邮件、会议记录和材料。"),
-                QStringLiteral("提炼原文的核心结论、关键背景和主要事项，使用简洁的分点结构输出，不遗漏重要限制与数字。")
+                QCoreApplication::translate("IntentPromptConfig", "Summarize Key Points"),
+                QCoreApplication::translate("IntentPromptConfig",
+                    "Condense long emails, meeting notes, and materials."),
+                QCoreApplication::translate("IntentPromptConfig",
+                    "Extract the core conclusions, key background, and main items from the "
+                    "original text. Use concise bullet points and do not omit important "
+                    "limitations or numbers.")
             },
             {
                 QStringLiteral("explain_content"),
-                QStringLiteral("解释内容"),
-                QStringLiteral("理解制度、术语、复杂要求和陌生材料。"),
-                QStringLiteral("用通俗、准确的语言解释原文中的制度、术语和复杂要求；必要时拆解概念并说明实际影响。")
+                QCoreApplication::translate("IntentPromptConfig", "Explain Content"),
+                QCoreApplication::translate("IntentPromptConfig",
+                    "Understand rules, terminology, complex requirements, and unfamiliar material."),
+                QCoreApplication::translate("IntentPromptConfig",
+                    "Explain the rules, terminology, and complex requirements in the original "
+                    "text in plain, accurate language. Break down concepts when needed and "
+                    "state their practical impact.")
             },
             {
                 QStringLiteral("extract_information"),
-                QStringLiteral("提取信息"),
-                QStringLiteral("整理时间、人员、事项、金额、联系方式等。"),
-                QStringLiteral("从原文提取可核实的信息，按时间、地点、人员、事项、金额、联系方式、编号和截止日期等字段结构化整理；没有的字段不要编造。")
+                QCoreApplication::translate("IntentPromptConfig", "Extract Information"),
+                QCoreApplication::translate("IntentPromptConfig",
+                    "Organize dates, people, items, amounts, and contact details."),
+                QCoreApplication::translate("IntentPromptConfig",
+                    "Extract verifiable information from the original text and structure it "
+                    "into fields such as date, place, people, items, amounts, contact details, "
+                    "reference numbers, and deadlines. Do not invent missing fields.")
             }
         }
     };
@@ -175,13 +198,13 @@ IntentPromptConfig IntentPromptConfig::load(QString* errorMessage)
     QFile registry(filePath());
     if (registry.exists()) {
         if (!registry.open(QIODevice::ReadOnly)) {
-            if (errorMessage) *errorMessage = QStringLiteral("无法读取功能配置：%1").arg(registry.errorString());
+            if (errorMessage) *errorMessage = QCoreApplication::translate("IntentPromptConfig", "Could not read the function configuration: %1").arg(registry.errorString());
             return {};
         }
         QJsonParseError parseError;
         const QJsonDocument document = QJsonDocument::fromJson(registry.readAll(), &parseError);
         if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
-            if (errorMessage) *errorMessage = QStringLiteral("功能配置不是合法 JSON：%1").arg(parseError.errorString());
+            if (errorMessage) *errorMessage = QCoreApplication::translate("IntentPromptConfig", "The function configuration is not valid JSON: %1").arg(parseError.errorString());
             return {};
         }
         const QJsonObject object = document.object();
@@ -222,13 +245,13 @@ IntentPromptConfig IntentPromptConfig::load(QString* errorMessage)
     for (const QFileInfo& file : files) {
         QFile input(file.absoluteFilePath());
         if (!input.open(QIODevice::ReadOnly)) {
-            migrationError = QStringLiteral("无法读取旧功能配置：%1").arg(file.absoluteFilePath());
+            migrationError = QCoreApplication::translate("IntentPromptConfig", "Could not read the legacy function configuration: %1").arg(file.absoluteFilePath());
             break;
         }
         QJsonParseError parseError;
         const QJsonDocument document = QJsonDocument::fromJson(input.readAll(), &parseError);
         if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
-            migrationError = QStringLiteral("旧功能配置不是合法 JSON：%1").arg(file.absoluteFilePath());
+            migrationError = QCoreApplication::translate("IntentPromptConfig", "The legacy function configuration is not valid JSON: %1").arg(file.absoluteFilePath());
             break;
         }
         const QJsonObject object = document.object();
@@ -268,7 +291,7 @@ bool IntentPromptConfig::save(QString* errorMessage) const
     const QFileInfo target(filePath());
     QDir directory(target.absolutePath());
     if (!directory.mkpath(QStringLiteral("."))) {
-        if (errorMessage) *errorMessage = QStringLiteral("无法创建功能配置目录：%1").arg(directory.path());
+        if (errorMessage) *errorMessage = QCoreApplication::translate("IntentPromptConfig", "Could not create the function configuration directory: %1").arg(directory.path());
         return false;
     }
 
@@ -283,7 +306,7 @@ bool IntentPromptConfig::save(QString* errorMessage) const
     if (!file.open(QIODevice::WriteOnly)
         || file.write(QJsonDocument(object).toJson(QJsonDocument::Indented)) < 0
         || !file.commit()) {
-        if (errorMessage) *errorMessage = QStringLiteral("无法保存功能配置：%1").arg(file.errorString());
+        if (errorMessage) *errorMessage = QCoreApplication::translate("IntentPromptConfig", "Could not save the function configuration: %1").arg(file.errorString());
         return false;
     }
 
