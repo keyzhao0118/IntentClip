@@ -64,4 +64,6 @@ private:
     QString streamingIntent_;
     QHash<QString, QString> resultCache_;
     QString currentIntent_;
+    // 进程内首次显示是否已停靠到主屏幕右下角；之后尊重用户移动的位置。
+    bool firstShowPositioned_ = false;
 };

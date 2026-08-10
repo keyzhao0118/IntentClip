@@ -55,6 +55,7 @@ MainWindow::MainWindow(QWidget* parent)
     setObjectName(QStringLiteral("mainDialog"));
     setWindowFlag(Qt::WindowContextHelpButtonHint, false);
     setWindowFlag(Qt::MSWindowsFixedSizeDialogHint, true);
+    setWindowFlag(Qt::WindowStaysOnTopHint, true);
     resize(700, 500);
     setMinimumSize(600, 300);
 
@@ -269,10 +270,9 @@ void MainWindow::showPanel()
     const bool attached = foregroundThread != 0 && foregroundThread != currentThread
         && AttachThreadInput(currentThread, foregroundThread, TRUE);
 
+    // WindowStaysOnTopHint 已使面板保持置顶，这里仅确保唤起时位于置顶层顶部
     SetWindowPos(handle, HWND_TOPMOST, 0, 0, 0, 0,
         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
-    SetWindowPos(handle, HWND_NOTOPMOST, 0, 0, 0, 0,
-        SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
     BringWindowToTop(handle);
     SetForegroundWindow(handle);
     SetActiveWindow(handle);
@@ -471,17 +471,27 @@ void MainWindow::updateExpandedSize()
     QTimer::singleShot(0, this, [this] {
         if (!layout()) return;
         layout()->activate();
-        QScreen* targetScreen = screen();
-        if (!targetScreen) targetScreen = QGuiApplication::primaryScreen();
+        QScreen* targetScreen = QGuiApplication::primaryScreen();
         const QRect available = targetScreen
             ? targetScreen->availableGeometry().adjusted(24, 24, -24, -24)
             : QRect(0, 0, 1200, 900);
         const int desiredHeight = sizeHint().height();
         resize(width(), qBound(minimumHeight(), desiredHeight, available.height()));
-        if (frameGeometry().bottom() > available.bottom())
-            move(x(), available.bottom() - frameGeometry().height() + 1);
-        if (frameGeometry().top() < available.top())
-            move(x(), available.top());
+        layout()->activate();
+        if (!firstShowPositioned_) {
+            // 进程内首次显示：停靠主屏幕右下角
+            firstShowPositioned_ = true;
+            const int x = qMax(available.left(), available.right() - width() + 1);
+            const int y = qMax(available.top(), available.bottom() - height() + 1);
+            move(x, y);
+        } else {
+            // 后续保持用户最新位置，仅在窗口超出可用区域时收回到可视范围
+            int newY = y();
+            if (frameGeometry().bottom() > available.bottom())
+                newY = available.bottom() - frameGeometry().height() + 1;
+            if (newY < available.top()) newY = available.top();
+            move(x(), newY);
+        }
     });
 }
 
@@ -514,11 +524,10 @@ void MainWindow::restoreWindowGeometry()
         restoreGeometry(geometry);
     } else {
         resize(700, 500);
-        QScreen* targetScreen = screen();
-        if (!targetScreen) targetScreen = QGuiApplication::primaryScreen();
+        QScreen* targetScreen = QGuiApplication::primaryScreen();
         if (targetScreen) {
-            const QRect available = targetScreen->availableGeometry();
-            move((available.width() - width()) / 2, (available.height() - height()) / 2);
+            const QRect available = targetScreen->availableGeometry().adjusted(24, 24, -24, -24);
+            move(available.right() - width() + 1, available.bottom() - height() + 1);
         }
     }
 }
